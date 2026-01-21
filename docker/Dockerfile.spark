@@ -1,0 +1,35 @@
+FROM bitnami/spark:3.5.0
+
+USER root
+
+# Install Python dependencies
+RUN apt-get update && apt-get install -y \
+    python3-pip \
+    curl \
+    vim \
+    && rm -rf /var/lib/apt/lists/*
+
+# Create directories
+RUN mkdir -p /opt/spark-apps /opt/spark-data /opt/notebooks
+
+# Copy requirements
+COPY requirements.txt /tmp/requirements.txt
+
+# Install Python packages
+RUN pip3 install --no-cache-dir -r /tmp/requirements.txt
+
+# Set working directory
+WORKDIR /opt/spark-apps
+
+# Copy application source code
+COPY src/ /opt/spark-apps/
+
+# Set environment variables
+ENV PYTHONPATH=/opt/spark-apps
+ENV PYSPARK_PYTHON=python3
+ENV PYSPARK_DRIVER_PYTHON=python3
+
+# Expose ports
+EXPOSE 4040 7077 8080 8081
+
+USER 1001
