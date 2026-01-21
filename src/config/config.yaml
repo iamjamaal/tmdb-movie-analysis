@@ -1,0 +1,262 @@
+# TMDB Movie Data Analysis Configuration
+
+# API Configuration
+api:
+  base_url: "https://api.themoviedb.org/3"
+  timeout: 30
+  retry_attempts: 3
+  retry_delay: 2
+  rate_limit:
+    requests_per_second: 40
+    burst: 50
+  cache:
+    enabled: true
+    ttl: 3600  # 1 hour
+    redis_host: "redis"
+    redis_port: 6379
+
+# Movie IDs to fetch
+data:
+  movie_ids:
+    - 0
+    - 299534
+    - 19995
+    - 140607
+    - 299536
+    - 597
+    - 135397
+    - 420818
+    - 24428
+    - 168259
+    - 99861
+    - 284054
+    - 12445
+    - 181808
+    - 330457
+    - 351286
+    - 109445
+    - 321612
+    - 260513
+
+# Spark Configuration
+spark:
+  app_name: "TMDB Movie Analysis Pipeline"
+  master: "spark://spark-master:7077"
+  config:
+    spark.executor.memory: "2g"
+    spark.driver.memory: "2g"
+    spark.executor.cores: "2"
+    spark.default.parallelism: "4"
+    spark.sql.shuffle.partitions: "4"
+    spark.sql.adaptive.enabled: "true"
+    spark.sql.adaptive.coalescePartitions.enabled: "true"
+    spark.dynamicAllocation.enabled: "false"
+    spark.sql.sources.partitionOverwriteMode: "dynamic"
+
+# Data Processing Configuration
+processing:
+  # Columns to drop
+  columns_to_drop:
+    - "adult"
+    - "imdb_id"
+    - "original_title"
+    - "video"
+    - "homepage"
+  
+  # JSON columns to process
+  json_columns:
+    - "belongs_to_collection"
+    - "genres"
+    - "production_countries"
+    - "production_companies"
+    - "spoken_languages"
+  
+  # Data quality thresholds
+  quality:
+    min_non_null_columns: 10
+    min_budget_for_roi: 10.0  # Million USD
+    min_votes_for_rating: 10
+  
+  # Value replacements
+  replacements:
+    zero_to_null:
+      - "budget"
+      - "revenue"
+      - "runtime"
+    placeholder_values:
+      - "No Data"
+      - "N/A"
+      - "Unknown"
+
+# KPI Configuration
+kpis:
+  rankings:
+    top_n: 10
+    metrics:
+      - name: "highest_revenue"
+        column: "revenue_musd"
+        ascending: false
+      - name: "highest_budget"
+        column: "budget_musd"
+        ascending: false
+      - name: "highest_profit"
+        column: "profit_musd"
+        ascending: false
+      - name: "lowest_profit"
+        column: "profit_musd"
+        ascending: true
+      - name: "highest_roi"
+        column: "roi"
+        ascending: false
+        filter: "budget_musd >= 10"
+      - name: "lowest_roi"
+        column: "roi"
+        ascending: true
+        filter: "budget_musd >= 10"
+      - name: "most_voted"
+        column: "vote_count"
+        ascending: false
+      - name: "highest_rated"
+        column: "vote_average"
+        ascending: false
+        filter: "vote_count >= 10"
+      - name: "lowest_rated"
+        column: "vote_average"
+        ascending: true
+        filter: "vote_count >= 10"
+      - name: "most_popular"
+        column: "popularity"
+        ascending: false
+
+  # Franchise analysis metrics
+  franchise:
+    aggregations:
+      - "count"
+      - "sum"
+      - "mean"
+      - "median"
+      - "std"
+    metrics:
+      - "budget_musd"
+      - "revenue_musd"
+      - "profit_musd"
+      - "roi"
+      - "vote_average"
+      - "popularity"
+
+  # Director analysis metrics
+  director:
+    min_movies: 1
+    metrics:
+      - "total_movies"
+      - "total_revenue"
+      - "avg_revenue"
+      - "avg_rating"
+      - "total_profit"
+
+# Advanced Queries
+queries:
+  search_1:
+    genres:
+      - "Science Fiction"
+      - "Action"
+    cast: "Bruce Willis"
+    sort_by: "vote_average"
+    ascending: false
+  
+  search_2:
+    cast: "Uma Thurman"
+    director: "Quentin Tarantino"
+    sort_by: "runtime"
+    ascending: true
+
+# Visualization Configuration
+visualization:
+  output_format: "html"
+  charts:
+    - type: "scatter"
+      title: "Revenue vs Budget Analysis"
+      x: "budget_musd"
+      y: "revenue_musd"
+      color: "profit_musd"
+    
+    - type: "box"
+      title: "ROI Distribution by Genre"
+      x: "genres"
+      y: "roi"
+    
+    - type: "scatter"
+      title: "Popularity vs Rating"
+      x: "vote_average"
+      y: "popularity"
+      size: "vote_count"
+    
+    - type: "line"
+      title: "Yearly Box Office Trends"
+      x: "release_year"
+      y: "revenue_musd"
+      aggregation: "sum"
+    
+    - type: "bar"
+      title: "Franchise vs Standalone Success"
+      x: "has_franchise"
+      y: ["revenue_musd", "roi", "popularity"]
+      aggregation: "mean"
+
+# Output Configuration
+output:
+  base_path: "/opt/spark-data/output"
+  formats:
+    - "parquet"
+    - "csv"
+    - "json"
+  partitioning:
+    enabled: true
+    columns:
+      - "release_year"
+  
+  reports:
+    format: "html"
+    include_visualizations: true
+    include_summary_statistics: true
+
+# Logging Configuration
+logging:
+  level: "INFO"
+  format: "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+  file: "/opt/spark-data/logs/tmdb_pipeline.log"
+  rotation:
+    when: "midnight"
+    interval: 1
+    backup_count: 7
+
+# Monitoring and Alerting
+monitoring:
+  enabled: true
+  metrics:
+    - "execution_time"
+    - "data_quality_score"
+    - "record_count"
+    - "null_percentage"
+  
+  alerts:
+    email:
+      enabled: false
+      recipients: []
+    slack:
+      enabled: false
+      webhook_url: ""
+
+# Testing Configuration
+testing:
+  data_validation:
+    enabled: true
+    checks:
+      - name: "null_check"
+        columns: ["id", "title"]
+      - name: "range_check"
+        column: "vote_average"
+        min: 0
+        max: 10
+      - name: "duplicate_check"
+        columns: ["id"]
