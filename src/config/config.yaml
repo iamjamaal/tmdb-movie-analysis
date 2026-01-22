@@ -18,25 +18,24 @@ api:
 # Movie IDs to fetch
 data:
   movie_ids:
-    - 0
-    - 299534
-    - 19995
-    - 140607
-    - 299536
-    - 597
-    - 135397
-    - 420818
-    - 24428
-    - 168259
-    - 99861
-    - 284054
-    - 12445
-    - 181808
-    - 330457
-    - 351286
-    - 109445
-    - 321612
-    - 260513
+    - 299534  # Avengers: Endgame
+    - 19995   # Avatar
+    - 140607  # Star Wars: The Force Awakens
+    - 299536  # Avengers: Infinity War
+    - 597     # Titanic
+    - 135397  # Jurassic World
+    - 420818  # The Lion King (2019)
+    - 24428   # The Avengers
+    - 168259  # Furious 7
+    - 99861   # Avengers: Age of Ultron
+    - 284054  # Black Panther
+    - 12445   # Harry Potter and the Deathly Hallows: Part 2
+    - 181808  # Star Wars: The Last Jedi
+    - 330457  # Frozen II
+    - 351286  # Jurassic World: Fallen Kingdom
+    - 109445  # Frozen
+    - 321612  # Beauty and the Beast (2017)
+    - 260513  # Incredibles 2
 
 # Spark Configuration
 spark:

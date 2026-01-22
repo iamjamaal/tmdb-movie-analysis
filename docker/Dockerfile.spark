@@ -1,4 +1,4 @@
-FROM bitnami/spark:3.5.0
+FROM apache/spark:3.5.0
 
 USER root
 
@@ -9,11 +9,13 @@ RUN apt-get update && apt-get install -y \
     vim \
     && rm -rf /var/lib/apt/lists/*
 
-# Create directories
-RUN mkdir -p /opt/spark-apps /opt/spark-data /opt/notebooks
+# Create directories with proper permissions
+RUN mkdir -p /opt/spark-apps /opt/spark-data /opt/notebooks /opt/spark/work && \
+    chown -R 1001:0 /opt/spark-apps /opt/spark-data /opt/notebooks /opt/spark/work && \
+    chmod -R 775 /opt/spark/work
 
 # Copy requirements
-COPY requirements.txt /tmp/requirements.txt
+COPY requirements-spark.txt /tmp/requirements.txt
 
 # Install Python packages
 RUN pip3 install --no-cache-dir -r /tmp/requirements.txt
@@ -28,8 +30,17 @@ COPY src/ /opt/spark-apps/
 ENV PYTHONPATH=/opt/spark-apps
 ENV PYSPARK_PYTHON=python3
 ENV PYSPARK_DRIVER_PYTHON=python3
+ENV SPARK_USER=spark
 
 # Expose ports
 EXPOSE 4040 7077 8080 8081
 
+# Run as spark user (keep original image user)
 USER 1001
+
+# Start Spark master or worker based on SPARK_MODE environment variable
+CMD if [ "$SPARK_MODE" = "master" ]; then \
+      /opt/spark/bin/spark-class org.apache.spark.deploy.master.Master; \
+    else \
+      /opt/spark/bin/spark-class org.apache.spark.deploy.worker.Worker $SPARK_MASTER_URL; \
+    fi
