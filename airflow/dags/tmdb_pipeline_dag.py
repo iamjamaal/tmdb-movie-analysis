@@ -11,7 +11,7 @@ from airflow.utils.dates import days_ago
 
 # Default arguments
 default_args = {
-    'owner': 'data-engineering-team',
+    'owner': 'noah_jamal_nabila',
     'depends_on_past': False,
     'email_on_failure': False,
     'email_on_retry': False,
@@ -67,7 +67,7 @@ validate_environment = BashOperator(
 # Task 2: Run Data Ingestion
 run_ingestion = SparkSubmitOperator(
     task_id='run_ingestion',
-    application='/opt/airflow/src/ingestion/data_fetcher.py',
+    application='/opt/airflow/src/jobs/run_ingestion.py',
     conn_id='spark_default',
     conf={
         'spark.master': 'spark://spark-master:7077',
@@ -75,35 +75,46 @@ run_ingestion = SparkSubmitOperator(
         'spark.driver.memory': '2g',
         'spark.executor.cores': '2',
     },
-    application_args=['--step', 'ingestion'],
+    application_args=[
+        '--config', '/opt/airflow/src/config/config.yaml',
+        '--output', '/opt/airflow/data/output'
+    ],
     dag=dag,
 )
 
 # Task 3: Run Data Cleaning
 run_cleaning = SparkSubmitOperator(
     task_id='run_cleaning',
-    application='/opt/airflow/src/processing/data_cleaner.py',
+    application='/opt/airflow/src/jobs/run_cleaning.py',
     conn_id='spark_default',
     conf={
         'spark.master': 'spark://spark-master:7077',
         'spark.executor.memory': '2g',
         'spark.driver.memory': '2g',
     },
-    application_args=['--step', 'cleaning'],
+    application_args=[
+        '--config', '/opt/airflow/src/config/config.yaml',
+        '--input', '/opt/airflow/data/output/raw',
+        '--output', '/opt/airflow/data/output'
+    ],
     dag=dag,
 )
 
 # Task 4: Run Data Transformation
 run_transformation = SparkSubmitOperator(
     task_id='run_transformation',
-    application='/opt/airflow/src/processing/data_transformer.py',
+    application='/opt/airflow/src/jobs/run_transformation.py',
     conn_id='spark_default',
     conf={
         'spark.master': 'spark://spark-master:7077',
         'spark.executor.memory': '2g',
         'spark.driver.memory': '2g',
     },
-    application_args=['--step', 'transformation'],
+    application_args=[
+        '--config', '/opt/airflow/src/config/config.yaml',
+        '--input', '/opt/airflow/data/output/cleaned',
+        '--output', '/opt/airflow/data/output'
+    ],
     dag=dag,
 )
 

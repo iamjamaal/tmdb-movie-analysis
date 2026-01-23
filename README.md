@@ -1,506 +1,408 @@
 # 🎬 TMDB Movie Data Analysis Pipeline
 
-[![PySpark](https://img.shields.io/badge/PySpark-3.5.0-orange)](https://spark.apache.org/)
-[![Docker](https://img.shields.io/badge/Docker-Compose-blue)](https://docker.com)
-[![Airflow](https://img.shields.io/badge/Airflow-2.7.3-red)](https://airflow.apache.org/)
-[![License](https://img.shields.io/badge/License-MIT-green)](LICENSE)
+A production-grade, scalable data engineering pipeline for analyzing movie data from The Movie Database (TMDB) API using Apache Spark, Airflow, and modern data engineering practices.
 
-A **production-grade, scalable** data engineering pipeline for analyzing TMDB (The Movie Database) movie data using **PySpark**, **Docker**, **Apache Airflow**, and modern data engineering best practices.
+## 📊 Project Overview
 
----
+This project transforms raw movie data from TMDB API into actionable insights through:
+- **Distributed Data Processing** with Apache Spark
+- **Workflow Orchestration** with Apache Airflow
+- **Intelligent Caching** with Redis
+- **Data Quality Validation** with custom validators
+- **Advanced Analytics** with comprehensive KPIs
+- **Interactive Visualizations** with Matplotlib/Seaborn
 
-## 📋 Table of Contents
-- [Features](#-features)
-- [Architecture](#-architecture)
-- [Quick Start](#-quick-start)
-- [Project Structure](#-project-structure)
-- [Pipeline Stages](#-pipeline-stages)
-- [Key Performance Indicators](#-key-performance-indicators)
-- [Usage](#-usage)
-- [Monitoring](#-monitoring)
-- [Development](#-development)
-- [Troubleshooting](#-troubleshooting)
-- [Contributing](#-contributing)
+## 🌟 Key Features
 
----
+### Data Engineering
+✅ **Scalable Architecture**: Spark cluster for distributed processing  
+✅ **Automated Workflows**: Airflow DAGs for orchestration  
+✅ **Smart Caching**: Redis-based caching to minimize API calls  
+✅ **Rate Limiting**: Token bucket algorithm for API protection  
+✅ **Error Handling**: Comprehensive retry logic and fallback mechanisms  
 
-## ✨ Features
+### Data Quality
+✅ **Schema Validation**: Automated schema checking  
+✅ **Business Rule Validation**: Custom validation rules  
+✅ **Data Completeness Checks**: Missing value detection  
+✅ **Outlier Detection**: Statistical anomaly identification  
+✅ **Quality Scoring**: Overall data health metrics  
 
-### 🚀 Production-Ready Architecture
-- **Distributed Processing**: Apache Spark cluster with master and workers
-- **Orchestration**: Apache Airflow for workflow management
-- **Containerization**: Docker Compose for easy deployment
-- **Caching**: Redis for API response caching
-- **Monitoring**: Grafana dashboards and Spark UI
+### Analytics & KPIs
+✅ **Financial Metrics**: Revenue, profit, ROI calculations  
+✅ **Performance Rankings**: Top/bottom movies by various metrics  
+✅ **Temporal Analysis**: Yearly trends and patterns  
+✅ **Genre Analysis**: Genre-specific performance metrics  
+✅ **Franchise Comparison**: Franchise vs standalone analysis  
+✅ **Director Analytics**: Director performance metrics  
 
-### 📊 Comprehensive Analysis
-- **19 Movie IDs** from TMDB API
-- **40+ KPIs** including ROI, profit, ratings, popularity
-- **Advanced Queries**: Genre-based searches, director analysis
-- **Franchise Analysis**: Franchise vs standalone performance
-- **Temporal Trends**: Yearly and decade-based insights
-
-### 🔧 Best Practices
-- **Modular Design**: Reusable, testable components
-- **Data Validation**: Automated quality checks
-- **Error Handling**: Comprehensive retry logic and fallbacks
-- **Logging**: Structured logging throughout pipeline
-- **Type Hints**: Full type annotations for maintainability
-
----
+### Visualization
+✅ **Interactive Dashboards**: Web-based reporting  
+✅ **Trend Visualizations**: Time-series analysis  
+✅ **Correlation Plots**: Multi-dimensional analysis  
+✅ **Distribution Charts**: Statistical distributions  
 
 ## 🏗️ Architecture
 
 ```
-┌─────────────────────────────────────────────────────────────┐
-│                    Docker Compose Environment                │
-├─────────────────────────────────────────────────────────────┤
-│                                                               │
-│  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐      │
-│  │ Spark Master │  │ Spark Worker│  │ Spark Worker│      │
-│  │   (Master)   │──│      1      │  │      2      │      │
-│  └──────────────┘  └──────────────┘  └──────────────┘      │
-│         │                                                     │
-│         │          ┌──────────────┐  ┌──────────────┐      │
-│         └──────────│   Airflow    │  │   Airflow    │      │
-│                    │  Webserver   │──│  Scheduler   │      │
-│                    └──────────────┘  └──────────────┘      │
-│                           │                 │                │
-│  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐      │
-│  │  PostgreSQL  │  │    Redis     │  │  JupyterLab  │      │
-│  │  (Metadata)  │  │   (Cache)    │  │ (Analysis)   │      │
-│  └──────────────┘  └──────────────┘  └──────────────┘      │
-│                                                               │
-└─────────────────────────────────────────────────────────────┘
-                            │
-                    ┌───────┴────────┐
-                    │   TMDB API     │
-                    └────────────────┘
+┌─────────────────────────────────────────────────┐
+│              User Interface Layer               │
+│   JupyterLab │ Airflow UI │ Grafana │ Reports  │
+└─────────────────────────────────────────────────┘
+                        ↓
+┌─────────────────────────────────────────────────┐
+│           Orchestration Layer                   │
+│           Apache Airflow                        │
+└─────────────────────────────────────────────────┘
+                        ↓
+┌─────────────────────────────────────────────────┐
+│           Processing Layer                      │
+│   Spark Master ←→ Worker-1 ←→ Worker-2         │
+└─────────────────────────────────────────────────┘
+                        ↓
+┌─────────────────────────────────────────────────┐
+│              Data Layer                         │
+│   PostgreSQL │ Redis Cache │ File Storage      │
+└─────────────────────────────────────────────────┘
 ```
-
----
-
-## 🚀 Quick Start
-
-### Prerequisites
-```bash
-- Docker 20.10+
-- Docker Compose 2.0+
-- 8GB RAM (16GB recommended)
-- TMDB API Key (get from: https://www.themoviedb.org/settings/api)
-```
-
-### 1. Clone and Setup
-```bash
-# Clone repository
-git clone <your-repo-url>
-cd tmdb-movie-analysis
-
-# Run setup and start everything
-make quick-start
-```
-
-This single command will:
-- Create directory structure
-- Generate `.env` file
-- Build Docker images
-- Start all services
-- Initialize Airflow with admin user
-
-### 2. Configure API Key
-```bash
-# Edit .env file and add your TMDB API key
-nano .env
-
-# Update this line:
-TMDB_API_KEY=your_actual_api_key_here
-```
-
-### 3. Restart Services
-```bash
-make restart
-```
-
-### 4. Run Pipeline
-
-#### Option A: Via Airflow UI (Recommended)
-1. Open http://localhost:8088
-2. Login: `admin` / `admin`
-3. Enable the DAG: `tmdb_movie_analysis_pipeline`
-4. Click "Trigger DAG"
-
-#### Option B: Via Command Line
-```bash
-make run-pipeline
-```
-
-#### Option C: Via Makefile (Complete Run)
-```bash
-make full-run
-```
-
-### 5. View Results
-```bash
-# View processed data
-make view-data
-
-# View KPI results
-make view-kpis
-
-# Open dashboards
-open data/output/dashboards/tmdb_dashboard.html
-```
-
----
 
 ## 📁 Project Structure
 
 ```
 tmdb-movie-analysis/
 ├── docker/                      # Docker configurations
-│   ├── docker-compose.yml
-│   ├── Dockerfile.spark
-│   ├── Dockerfile.airflow
-│   └── Dockerfile.jupyter
+│   ├── docker-compose.yml      # Multi-service orchestration
+│   ├── Dockerfile.spark        # Spark image
+│   ├── Dockerfile.airflow      # Airflow image
+│   └── Dockerfile.jupyter      # Jupyter image
+│
+├── airflow/                     # Airflow components
+│   ├── dags/
+│   │   └── tmdb_pipeline_dag.py
+│   ├── plugins/
+│   └── config/
 │
 ├── src/                         # Source code
 │   ├── config/
 │   │   ├── config.yaml         # Central configuration
-│   │   └── logging_config.py
-│   ├── ingestion/
-│   │   ├── api_client.py       # TMDB API client with caching
-│   │   └── data_fetcher.py     # Data ingestion orchestrator
-│   ├── processing/
-│   │   ├── data_cleaner.py     # Data cleaning logic
+│   │   └── logging_config.py   # Logging setup
+│   │
+│   ├── ingestion/              # Data fetching
+│   │   ├── api_client.py       # TMDB API client
+│   │   └── data_fetcher.py     # Data fetching logic
+│   │
+│   ├── processing/             # Data processing
+│   │   ├── data_cleaner.py     # Data cleaning
 │   │   ├── data_transformer.py # Feature engineering
-│   │   └── data_validator.py   # Data quality checks
-│   ├── analytics/
+│   │   └── data_validator.py   # Quality validation
+│   │
+│   ├── analytics/              # Analytics & KPIs
 │   │   ├── kpi_calculator.py   # KPI calculations
-│   │   └── advanced_queries.py # Complex queries
-│   ├── visualization/
+│   │   ├── advanced_queries.py # Complex queries
+│   │   └── metrics_aggregator.py
+│   │
+│   ├── visualization/          # Visualizations
 │   │   └── dashboard_generator.py
-│   ├── utils/
-│   │   └── spark_session.py
-│   └── main.py                 # Main pipeline orchestrator
-│
-├── airflow/
-│   └── dags/
-│       └── tmdb_pipeline_dag.py
+│   │
+│   ├── utils/                  # Utilities
+│   │   ├── spark_session.py    # Spark management
+│   │   └── helpers.py          # Helper functions
+│   │
+│   └── main.py                 # Main pipeline
 │
 ├── tests/                       # Test suite
 │   ├── unit/
-│   └── integration/
+│   ├── integration/
+│   └── conftest.py
 │
 ├── notebooks/                   # Jupyter notebooks
 │   └── exploratory_analysis.ipynb
 │
-├── data/                        # Data storage
-│   ├── raw/
-│   ├── processed/
-│   └── output/
+├── data/                        # Data directories
+│   ├── raw/                    # Raw API data
+│   ├── processed/              # Cleaned data
+│   └── output/                 # Results & reports
 │
-├── Makefile                     # Automation commands
-├── requirements.txt
-├── README.md
-└── IMPLEMENTATION_GUIDE.md
+├── docs/                        # Documentation
+│   ├── architecture.md
+│   └── api_documentation.md
+│
+├── requirements.txt             # Python dependencies
+├── Makefile                    # Automation commands
+└── README.md                   # This file
 ```
 
----
+## 🚀 Quick Start
 
-## 🔄 Pipeline Stages
+### Prerequisites
+- Docker Desktop (24.0+)
+- Docker Compose v2
+- 8GB+ RAM recommended
+- TMDB API Key ([Get it here](https://www.themoviedb.org/settings/api))
 
-### Stage 1: Data Ingestion
-- Fetch movie data from TMDB API
-- Apply rate limiting and caching
-- Handle API errors gracefully
-- Store raw data
+### Installation
 
-### Stage 2: Data Cleaning
-- Drop irrelevant columns
-- Process JSON columns (genres, companies, etc.)
-- Convert datatypes
-- Handle missing values
-- Remove duplicates
-- Filter for released movies
+1. **Clone the repository**
+```bash
+git clone <repository-url>
+cd tmdb-movie-analysis
+```
 
-### Stage 3: Data Transformation
-- Convert currency to millions USD
-- Calculate profit and ROI
-- Extract release year and decade
-- Categorize by budget and rating
-- Add franchise indicators
-- Calculate advanced metrics
+2. **Set up environment variables**
+```bash
+cp .env.example .env
+# Edit .env with your TMDB API key and configurations
+nano .env
+```
 
-### Stage 4: Data Validation
+3. **Start all services**
+```bash
+make setup
+make up
+```
+
+4. **Access the applications**
+- **Airflow**: http://localhost:8081 (admin/admin)
+- **Spark Master UI**: http://localhost:8080
+- **JupyterLab**: http://localhost:8888
+- **Grafana**: http://localhost:3000 (admin/admin)
+
+5. **Run the pipeline**
+```bash
+# Via Airflow UI (recommended)
+# Navigate to http://localhost:8081 and trigger the DAG
+
+# Or via command line
+make run-pipeline
+```
+
+## 📋 Configuration
+
+### Environment Variables (.env)
+```bash
+# API Configuration
+TMDB_API_KEY=your_tmdb_api_key
+
+# Database
+POSTGRES_USER=airflow
+POSTGRES_PASSWORD=airflow
+POSTGRES_DB=airflow
+
+# Redis
+REDIS_PASSWORD=redis_secret
+
+# Airflow
+AIRFLOW_UID=50000
+AIRFLOW__CORE__FERNET_KEY=your_fernet_key
+```
+
+### Pipeline Configuration (config.yaml)
+```yaml
+api:
+  base_url: "https://api.themoviedb.org/3"
+  rate_limit:
+    requests_per_second: 40
+
+spark:
+  driver_memory: "4g"
+  executor_memory: "4g"
+  shuffle_partitions: "200"
+
+pipeline:
+  batch_size: 100
+  checkpoint_interval: 10
+```
+
+## 🎯 Pipeline Stages
+
+### 1. Data Ingestion
+- Fetches movie data from TMDB API
+- Implements rate limiting and caching
+- Handles API failures with retry logic
+
+### 2. Data Cleaning
+- Removes irrelevant columns
+- Handles missing values
+- Fixes data type issues
+- Removes duplicates
+- Standardizes formats
+
+### 3. Data Transformation
+- Feature engineering
+- Calculated fields (profit, ROI)
+- Date parsing and extraction
+- Multi-value field processing
+
+### 4. Data Validation
 - Schema validation
-- Null checks
-- Range validation
-- Duplicate detection
-- Completeness checks
-- Generate quality score
+- Business rule checks
+- Data quality scoring
+- Outlier detection
 
-### Stage 5: Analytics & KPIs
-- Calculate 40+ KPIs
-- Rank movies by various metrics
-- Analyze franchises vs standalone
-- Director and genre analysis
+### 5. Analytics & KPIs
+- Financial metrics (revenue, profit, ROI)
+- Performance rankings
+- Genre analysis
+- Director/franchise analytics
 - Temporal trends
 
-### Stage 6: Advanced Queries
-- Genre-based searches
-- Actor-director combinations
-- Custom filtering
+### 6. Visualization
+- Revenue vs budget plots
+- Genre distributions
+- Yearly trends
+- ROI distributions
+- Rating correlations
+- Franchise comparisons
 
-### Stage 7: Visualization
-- Interactive dashboards
-- Trend visualizations
-- Comparative analysis charts
-
----
-
-## 📊 Key Performance Indicators
+## 📊 Sample KPIs
 
 ### Financial Metrics
-- **Highest/Lowest Revenue** (Top 10)
-- **Highest/Lowest Budget** (Top 10)
-- **Highest/Lowest Profit** (Top 10)
-- **ROI Analysis** (Budget ≥ $10M)
+- **Highest Revenue Movies**
+- **Highest Profit Movies**
+- **Best ROI (Budget ≥ $10M)**
+- **Worst ROI**
 
-### Rating Metrics
-- **Highest Rated** (≥10 votes, Top 10)
-- **Lowest Rated** (≥10 votes, Top 10)
-- **Most Voted** (Top 10)
-- **Most Popular** (Top 10)
+### Quality Metrics
+- **Highest Rated Movies** (min 10 votes)
+- **Most Popular Movies**
+- **Most Voted Movies**
 
-### Comparative Analysis
-- **Franchise vs Standalone**: Revenue, ROI, Budget, Popularity, Rating
-- **Top Franchises**: Movies count, Budget, Revenue, Rating
-- **Top Directors**: Movies count, Revenue, Rating
-- **Genre Performance**: Revenue, ROI, Rating by genre
-- **Budget Category Performance**: Micro, Low, Medium, High, Blockbuster
-
-### Temporal Analysis
-- **Yearly Trends**: Revenue, Budget, ROI over time
-- **Decade Analysis**: Performance by decade
-
----
-
-## 💻 Usage
-
-### Common Commands
-
-```bash
-# Start services
-make up
-
-# Stop services
-make down
-
-# View logs
-make logs
-make logs-spark      # Spark only
-make logs-airflow    # Airflow only
-
-# Run pipeline
-make run-pipeline
-
-# View results
-make view-data
-make view-kpis
-
-# Health check
-make health-check
-
-# Clean data
-make clean-data
-make clean           # Clean everything
-```
-
-### Accessing Services
-
-| Service | URL | Credentials |
-|---------|-----|-------------|
-| Spark Master UI | http://localhost:8080 | - |
-| Airflow UI | http://localhost:8088 | admin / admin |
-| JupyterLab | http://localhost:8888 | Get token: `make jupyter-token` |
-| Grafana | http://localhost:3000 | admin / admin |
-
-### Interactive Development
-
-```bash
-# Open Spark shell
-make shell-spark
-
-# Open JupyterLab
-make jupyter-token
-# Then open http://localhost:8888 with the token
-```
-
----
-
-## 📈 Monitoring
-
-### Spark Monitoring
-- **Spark Master UI**: http://localhost:8080
-  - Active/Completed Applications
-  - Workers status
-  - Resource utilization
-
-### Airflow Monitoring
-- **Airflow UI**: http://localhost:8088
-  - DAG execution status
-  - Task logs
-  - Execution timeline
-
-### Application Logs
-```bash
-# View real-time logs
-make logs
-
-# View pipeline log file
-docker-compose exec spark-master cat /opt/spark-data/logs/tmdb_pipeline.log
-```
-
----
+### Analysis Queries
+- Franchise vs Standalone comparison
+- Genre-specific performance
+- Director performance metrics
+- Yearly box office trends
 
 ## 🛠️ Development
 
 ### Running Tests
 ```bash
+# Unit tests
 make test
+
+# Integration tests
+make test-integration
+
+# Coverage report
+make test-coverage
 ```
 
 ### Code Quality
 ```bash
-# Linting
-make lint
-
-# Formatting
+# Format code
 make format
 
-# Validate config
-make validate-config
+# Lint code
+make lint
+
+# Type checking
+make type-check
 ```
 
-### Adding New Features
-
-1. **Create new module** in appropriate `src/` directory
-2. **Add tests** in `tests/` directory
-3. **Update configuration** in `config.yaml`
-4. **Update pipeline** in `main.py`
-5. **Run tests** with `make test`
-
----
-
-## 🐛 Troubleshooting
-
-### Issue: "TMDB_API_KEY not set"
+### Debugging
 ```bash
-# Check .env file
-cat .env | grep TMDB_API_KEY
+# View logs
+make logs
 
-# Update and restart
-nano .env
-make restart
+# Enter Spark container
+make spark-shell
+
+# Check service health
+make health-check
 ```
 
-### Issue: "Connection refused to Spark Master"
+## 📈 Monitoring
+
+### Metrics Available
+- Pipeline execution time
+- Data quality scores
+- API call statistics
+- Cache hit rates
+- Spark job metrics
+
+### Dashboards
+- **Grafana**: Real-time metrics (http://localhost:3000)
+- **Spark UI**: Job execution details (http://localhost:8080)
+- **Airflow UI**: Workflow status (http://localhost:8081)
+
+## 🧪 Testing Strategy
+
+### Unit Tests
+- Individual component testing
+- Mock external dependencies
+- Fast execution
+
+### Integration Tests
+- End-to-end pipeline testing
+- Real Spark sessions
+- Database interactions
+
+### Data Quality Tests
+- Schema validation tests
+- Business rule tests
+- Edge case handling
+
+## 🔧 Troubleshooting
+
+### Common Issues
+
+**Spark Out of Memory**
+```yaml
+# Increase memory in docker-compose.yml
+spark-master:
+  environment:
+    - SPARK_DRIVER_MEMORY=8g
+```
+
+**API Rate Limiting**
+```yaml
+# Reduce rate in config.yaml
+api:
+  rate_limit:
+    requests_per_second: 20
+```
+
+**Database Connection Issues**
 ```bash
-# Check Spark status
-make status
-
-# Restart Spark
-docker-compose restart spark-master spark-worker-1 spark-worker-2
+# Reset database
+docker-compose down -v
+docker-compose up -d
 ```
-
-### Issue: "Out of Memory"
-```bash
-# Adjust memory in docker-compose.yml
-# Increase SPARK_WORKER_MEMORY and SPARK_DRIVER_MEMORY
-# Then rebuild: make build && make up
-```
-
-### Issue: "Data not found"
-```bash
-# Check output directory
-make view-data
-
-# Re-run pipeline
-make clean-data
-make run-pipeline
-```
-
-For more troubleshooting, see [IMPLEMENTATION_GUIDE.md](IMPLEMENTATION_GUIDE.md)
-
----
-
-## 📝 Configuration
-
-### config.yaml
-Main configuration file for:
-- API settings (rate limiting, caching)
-- Spark configuration
-- Movie IDs to fetch
-- Processing parameters
-- KPI definitions
-- Output settings
-
-### Environment Variables (.env)
-- `TMDB_API_KEY`: Your TMDB API key
-- `AIRFLOW_UID`: Airflow user ID
-- `POSTGRES_*`: Database credentials
-
----
-
-## 🎯 Future Enhancements
-
-- [ ] Real-time streaming data ingestion
-- [ ] Machine learning for movie success prediction
-- [ ] Recommendation system
-- [ ] Cloud deployment (AWS/GCP/Azure)
-- [ ] Enhanced visualizations with Tableau/PowerBI
-- [ ] Sentiment analysis on movie reviews
-- [ ] Integration with additional APIs (OMDB, IMDB)
-
----
 
 ## 📚 Documentation
 
-- [Implementation Guide](IMPLEMENTATION_GUIDE.md) - Detailed setup instructions
-- [API Documentation](docs/api_documentation.md) - TMDB API reference
-- [Architecture](docs/architecture.md) - System design details
-
----
+- [Complete Implementation Guide](COMPLETE_IMPLEMENTATION_GUIDE.md)
+- [Architecture Documentation](docs/architecture.md)
+- [API Documentation](docs/api_documentation.md)
 
 ## 🤝 Contributing
 
 1. Fork the repository
-2. Create a feature branch (`git checkout -b feature/amazing-feature`)
-3. Commit changes (`git commit -m 'Add amazing feature'`)
-4. Push to branch (`git push origin feature/amazing-feature`)
-5. Open a Pull Request
+2. Create a feature branch
+3. Make your changes
+4. Add tests
+5. Submit a pull request
 
----
+## 📄 License
 
-## 📜 License
+This project is licensed under the MIT License - see the LICENSE file for details.
 
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+## 👥 Authors
 
----
+- Your Name - *Initial work*
 
 ## 🙏 Acknowledgments
 
-- **TMDB** for providing the movie database API
-- **Apache Spark** community for the excellent framework
-- **Apache Airflow** for workflow orchestration
-- **Docker** for containerization
+- TMDB for providing the API
+- Apache Spark community
+- Apache Airflow community
+
+## 📞 Support
+
+- Documentation: See `docs/` directory
+- Issues: GitHub Issues
+- Email: your-email@example.com
 
 ---
 
-## 📧 Contact
-
-For questions or support, please open an issue on GitHub.
-
----
-
-**⭐ If you find this project helpful, please consider giving it a star!**
+**Happy Data Engineering! 🚀**
