@@ -303,7 +303,7 @@ class TMDBClient:
     
     def fetch_movies_batch(self, movie_ids: List[int]) -> List[Dict]:
         """
-        Fetch multiple movies with progress tracking
+        Fetch multiple movies with progress tracking (parallel with threading)
         
         Args:
             movie_ids: List of TMDB movie IDs
@@ -311,18 +311,37 @@ class TMDBClient:
         Returns:
             List of movie data dictionaries
         """
+        from concurrent.futures import ThreadPoolExecutor, as_completed
+        
         movies = []
         total = len(movie_ids)
         
-        logger.info(f"Fetching {total} movies...")
+        logger.info(f"Fetching {total} movies in parallel...")
         
-        for idx, movie_id in enumerate(movie_ids, 1):
-            movie_data = self.get_complete_movie_data(movie_id)
-            if movie_data:
-                movies.append(movie_data)
+        # Use thread pool for parallel requests (rate limiter handles coordination)
+        with ThreadPoolExecutor(max_workers=10) as executor:
+            # Submit all tasks
+            future_to_id = {
+                executor.submit(self.get_complete_movie_data, movie_id): movie_id 
+                for movie_id in movie_ids
+            }
             
-            if idx % 5 == 0:
-                logger.info(f"Progress: {idx}/{total} movies fetched")
+            # Process completed tasks
+            completed = 0
+            for future in as_completed(future_to_id):
+                movie_id = future_to_id[future]
+                try:
+                    movie_data = future.result()
+                    if movie_data:
+                        movies.append(movie_data)
+                    completed += 1
+                    
+                    if completed % 5 == 0 or completed == total:
+                        logger.info(f"Progress: {completed}/{total} movies fetched ({(completed/total)*100:.0f}%)")
+                        
+                except Exception as e:
+                    logger.error(f"Error fetching movie {movie_id}: {e}")
+                    completed += 1
         
         logger.info(f"Successfully fetched {len(movies)}/{total} movies")
         return movies

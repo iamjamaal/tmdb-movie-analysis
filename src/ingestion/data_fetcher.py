@@ -94,8 +94,8 @@ class DataFetcher:
         
         logger.info(f"Successfully fetched {len(movies_data)} movies")
         
-        # Create DataFrame
-        df = self.spark.createDataFrame(movies_data, schema=self.get_movie_schema())
+        # Create DataFrame with schema inference (faster than strict schema)
+        df = self.spark.createDataFrame(movies_data)
         
         # Cache for reuse
         df.cache()

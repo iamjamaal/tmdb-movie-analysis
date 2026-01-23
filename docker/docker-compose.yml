@@ -1,203 +1,269 @@
 version: '3.8'
 
+x-airflow-common: &airflow-common
+  build:
+    context: .
+    dockerfile: docker/Dockerfile.airflow
+  environment: &airflow-common-env
+    AIRFLOW__CORE__EXECUTOR: LocalExecutor
+    AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://airflow:airflow@postgres/airflow
+    AIRFLOW__CORE__FERNET_KEY: ${AIRFLOW__CORE__FERNET_KEY}
+    AIRFLOW__CORE__DAGS_ARE_PAUSED_AT_CREATION: 'true'
+    AIRFLOW__CORE__LOAD_EXAMPLES: 'false'
+    AIRFLOW__API__AUTH_BACKENDS: 'airflow.api.auth.backend.basic_auth'
+    TMDB_API_KEY: ${TMDB_API_KEY}
+    POSTGRES_HOST: postgres
+    REDIS_HOST: redis
+    REDIS_PORT: 6379
+    LOG_LEVEL: INFO
+  volumes:
+    - ./airflow/dags:/opt/airflow/dags
+    - ./airflow/logs:/opt/airflow/logs
+    - ./airflow/plugins:/opt/airflow/plugins
+    - ./src:/opt/spark-apps/src
+    - ./data:/opt/spark-data
+    - ./logs:/opt/logs
+  user: "${AIRFLOW_UID:-50000}:0"
+  depends_on:
+    postgres:
+      condition: service_healthy
+    redis:
+      condition: service_healthy
+
 services:
-  # Apache Spark Master
+  # ==========================================================================
+  # PostgreSQL Database
+  # ==========================================================================
+  postgres:
+    image: postgres:14-alpine
+    container_name: tmdb-postgres
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-airflow}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-airflow}
+      POSTGRES_DB: ${POSTGRES_DB:-airflow}
+    volumes:
+      - postgres-db-volume:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD", "pg_isready", "-U", "airflow"]
+      interval: 5s
+      retries: 5
+    restart: always
+
+  # ==========================================================================
+  # Redis Cache
+  # ==========================================================================
+  redis:
+    image: redis:7-alpine
+    container_name: tmdb-redis
+    command: redis-server --requirepass ${REDIS_PASSWORD:-redis_password}
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-volume:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 30s
+      retries: 50
+    restart: always
+
+  # ==========================================================================
+  # Spark Master
+  # ==========================================================================
   spark-master:
     build:
-      context: ..
+      context: .
       dockerfile: docker/Dockerfile.spark
-    container_name: spark-master
+    container_name: tmdb-spark-master
     hostname: spark-master
-    ports:
-      - "8080:8080"  # Spark Master Web UI
-      - "7077:7077"  # Spark Master Port
-      - "4040:4040"  # Spark Application UI
     environment:
       - SPARK_MODE=master
       - SPARK_RPC_AUTHENTICATION_ENABLED=no
       - SPARK_RPC_ENCRYPTION_ENABLED=no
       - SPARK_LOCAL_STORAGE_ENCRYPTION_ENABLED=no
       - SPARK_SSL_ENABLED=no
-    env_file:
-      - ../.env
+      - SPARK_MASTER_HOST=spark-master
+      - SPARK_MASTER_PORT=7077
+      - SPARK_MASTER_WEBUI_PORT=8080
+      - TMDB_API_KEY=${TMDB_API_KEY}
+      - POSTGRES_HOST=postgres
+      - REDIS_HOST=redis
+      - REDIS_PASSWORD=${REDIS_PASSWORD:-redis_password}
+    ports:
+      - "8080:8080"  # Spark Master Web UI
+      - "7077:7077"  # Spark Master
     volumes:
-      - ../src:/opt/spark-apps
-      - ../data:/opt/spark-data
-      - ../notebooks:/opt/notebooks
-    networks:
-      - tmdb-network
+      - ./src:/opt/spark-apps/src
+      - ./data:/opt/spark-data
+      - ./logs:/opt/logs
+    restart: always
 
-  # Apache Spark Worker 1
+  # ==========================================================================
+  # Spark Worker 1
+  # ==========================================================================
   spark-worker-1:
     build:
-      context: ..
+      context: .
       dockerfile: docker/Dockerfile.spark
-    container_name: spark-worker-1
-    depends_on:
-      - spark-master
+    container_name: tmdb-spark-worker-1
+    hostname: spark-worker-1
+    environment:
+      - SPARK_MODE=worker
+      - SPARK_MASTER_URL=spark://spark-master:7077
+      - SPARK_WORKER_MEMORY=4G
+      - SPARK_WORKER_CORES=2
+      - SPARK_RPC_AUTHENTICATION_ENABLED=no
+      - SPARK_RPC_ENCRYPTION_ENABLED=no
+      - SPARK_LOCAL_STORAGE_ENCRYPTION_ENABLED=no
+      - SPARK_SSL_ENABLED=no
+      - TMDB_API_KEY=${TMDB_API_KEY}
+      - REDIS_HOST=redis
+      - REDIS_PASSWORD=${REDIS_PASSWORD:-redis_password}
     ports:
       - "8081:8081"
-    environment:
-      - SPARK_MODE=worker
-      - SPARK_MASTER_URL=spark://spark-master:7077
-      - SPARK_WORKER_MEMORY=2G
-      - SPARK_WORKER_CORES=2
-      - SPARK_RPC_AUTHENTICATION_ENABLED=no
-      - SPARK_RPC_ENCRYPTION_ENABLED=no
     volumes:
-      - ../src:/opt/spark-apps
-      - ../data:/opt/spark-data
-    networks:
-      - tmdb-network
+      - ./src:/opt/spark-apps/src
+      - ./data:/opt/spark-data
+      - ./logs:/opt/logs
+    depends_on:
+      - spark-master
+    restart: always
 
-  # Apache Spark Worker 2
+  # ==========================================================================
+  # Spark Worker 2
+  # ==========================================================================
   spark-worker-2:
     build:
-      context: ..
+      context: .
       dockerfile: docker/Dockerfile.spark
-    container_name: spark-worker-2
-    depends_on:
-      - spark-master
-    ports:
-      - "8082:8081"
+    container_name: tmdb-spark-worker-2
+    hostname: spark-worker-2
     environment:
       - SPARK_MODE=worker
       - SPARK_MASTER_URL=spark://spark-master:7077
-      - SPARK_WORKER_MEMORY=2G
+      - SPARK_WORKER_MEMORY=4G
       - SPARK_WORKER_CORES=2
       - SPARK_RPC_AUTHENTICATION_ENABLED=no
       - SPARK_RPC_ENCRYPTION_ENABLED=no
-    volumes:
-      - ../src:/opt/spark-apps
-      - ../data:/opt/spark-data
-    networks:
-      - tmdb-network
-
-  # PostgreSQL Database for Airflow & Results
-  postgres:
-    image: postgres:14-alpine
-    container_name: postgres-db
-    environment:
-      - POSTGRES_USER=airflow
-      - POSTGRES_PASSWORD=airflow
-      - POSTGRES_DB=airflow
-      - POSTGRES_MULTIPLE_DATABASES=tmdb_analytics
+      - SPARK_LOCAL_STORAGE_ENCRYPTION_ENABLED=no
+      - SPARK_SSL_ENABLED=no
+      - TMDB_API_KEY=${TMDB_API_KEY}
+      - REDIS_HOST=redis
+      - REDIS_PASSWORD=${REDIS_PASSWORD:-redis_password}
     ports:
-      - "5432:5432"
+      - "8082:8081"
     volumes:
-      - postgres-data:/var/lib/postgresql/data
-      - ./init-db.sql:/docker-entrypoint-initdb.d/init.sql
-    networks:
-      - tmdb-network
-
-  # Apache Airflow Webserver
-  airflow-webserver:
-    build:
-      context: ..
-      dockerfile: docker/Dockerfile.airflow
-    container_name: airflow-webserver
-    depends_on:
-      - postgres
-    environment:
-      - AIRFLOW__CORE__EXECUTOR=LocalExecutor
-      - AIRFLOW__DATABASE__SQL_ALCHEMY_CONN=postgresql+psycopg2://airflow:airflow@postgres:5432/airflow
-      - AIRFLOW__CORE__FERNET_KEY=UKMzEm3yIuFYEq1y3-2FxPNWSVwRASpahmQ9kQfEr8E=
-      - AIRFLOW__CORE__DAGS_ARE_PAUSED_AT_CREATION=True
-      - AIRFLOW__CORE__LOAD_EXAMPLES=False
-      - AIRFLOW__API__AUTH_BACKENDS=airflow.api.auth.backend.basic_auth
-      - AIRFLOW__WEBSERVER__EXPOSE_CONFIG=True
-    volumes:
-      - ../airflow/dags:/opt/airflow/dags
-      - ../airflow/logs:/opt/airflow/logs
-      - ../airflow/plugins:/opt/airflow/plugins
-      - ../src:/opt/airflow/src
-      - ../data:/opt/airflow/data
-    ports:
-      - "8088:8080"
-    command: webserver
-    healthcheck:
-      test: ["CMD", "curl", "--fail", "http://localhost:8080/health"]
-      interval: 30s
-      timeout: 10s
-      retries: 5
-    networks:
-      - tmdb-network
-
-  # Apache Airflow Scheduler
-  airflow-scheduler:
-    build:
-      context: ..
-      dockerfile: docker/Dockerfile.airflow
-    container_name: airflow-scheduler
-    depends_on:
-      - postgres
-      - airflow-webserver
-    environment:
-      - AIRFLOW__CORE__EXECUTOR=LocalExecutor
-      - AIRFLOW__DATABASE__SQL_ALCHEMY_CONN=postgresql+psycopg2://airflow:airflow@postgres:5432/airflow
-      - AIRFLOW__CORE__FERNET_KEY=UKMzEm3yIuFYEq1y3-2FxPNWSVwRASpahmQ9kQfEr8E=
-    volumes:
-      - ../airflow/dags:/opt/airflow/dags
-      - ../airflow/logs:/opt/airflow/logs
-      - ../airflow/plugins:/opt/airflow/plugins
-      - ../src:/opt/airflow/src
-      - ../data:/opt/airflow/data
-    command: scheduler
-    networks:
-      - tmdb-network
-
-  # JupyterLab for Interactive Analysis
-  jupyter:
-    build:
-      context: ..
-      dockerfile: docker/Dockerfile.jupyter
-    container_name: jupyter-lab
+      - ./src:/opt/spark-apps/src
+      - ./data:/opt/spark-data
+      - ./logs:/opt/logs
     depends_on:
       - spark-master
+    restart: always
+
+  # ==========================================================================
+  # Airflow Webserver
+  # ==========================================================================
+  airflow-webserver:
+    <<: *airflow-common
+    container_name: tmdb-airflow-webserver
+    command: webserver
     ports:
-      - "8888:8888"
+      - "8083:8080"
+    healthcheck:
+      test: ["CMD", "curl", "--fail", "http://localhost:8080/health"]
+      interval: 10s
+      timeout: 10s
+      retries: 5
+    restart: always
+
+  # ==========================================================================
+  # Airflow Scheduler
+  # ==========================================================================
+  airflow-scheduler:
+    <<: *airflow-common
+    container_name: tmdb-airflow-scheduler
+    command: scheduler
+    healthcheck:
+      test: ["CMD-SHELL", 'airflow jobs check --job-type SchedulerJob --hostname "$${HOSTNAME}"']
+      interval: 10s
+      timeout: 10s
+      retries: 5
+    restart: always
+
+  # ==========================================================================
+  # Airflow Init (runs once to initialize)
+  # ==========================================================================
+  airflow-init:
+    <<: *airflow-common
+    container_name: tmdb-airflow-init
+    entrypoint: /bin/bash
+    command:
+      - -c
+      - |
+        mkdir -p /opt/airflow/logs /opt/airflow/dags /opt/airflow/plugins
+        airflow db init
+        airflow users create \
+          --username admin \
+          --firstname Admin \
+          --lastname User \
+          --role Admin \
+          --email admin@example.com \
+          --password admin
+    environment:
+      <<: *airflow-common-env
+      _AIRFLOW_DB_UPGRADE: 'true'
+      _AIRFLOW_WWW_USER_CREATE: 'true'
+
+  # ==========================================================================
+  # JupyterLab
+  # ==========================================================================
+  jupyter:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.jupyter
+    container_name: tmdb-jupyter
     environment:
       - JUPYTER_ENABLE_LAB=yes
+      - TMDB_API_KEY=${TMDB_API_KEY}
       - SPARK_MASTER=spark://spark-master:7077
-    env_file:
-      - ../.env
-    volumes:
-      - ../notebooks:/home/jovyan/work/notebooks
-      - ../src:/home/jovyan/work/src
-      - ../data:/home/jovyan/work/data
-    networks:
-      - tmdb-network
-
-  # Redis for Caching API Responses
-  redis:
-    image: redis:7-alpine
-    container_name: redis-cache
+      - POSTGRES_HOST=postgres
+      - REDIS_HOST=redis
+      - REDIS_PASSWORD=${REDIS_PASSWORD:-redis_password}
     ports:
-      - "6379:6379"
+      - "8888:8888"
     volumes:
-      - redis-data:/data
-    networks:
-      - tmdb-network
+      - ./notebooks:/home/jovyan/notebooks
+      - ./src:/home/jovyan/src
+      - ./data:/home/jovyan/data
+    restart: always
 
-  # Grafana for Monitoring
+  # ==========================================================================
+  # Grafana (Monitoring Dashboard)
+  # ==========================================================================
   grafana:
     image: grafana/grafana:latest
-    container_name: grafana-dashboard
-    ports:
-      - "3000:3000"
+    container_name: tmdb-grafana
     environment:
       - GF_SECURITY_ADMIN_USER=admin
       - GF_SECURITY_ADMIN_PASSWORD=admin
+      - GF_INSTALL_PLUGINS=grafana-piechart-panel
+    ports:
+      - "3000:3000"
     volumes:
-      - grafana-data:/var/lib/grafana
-    networks:
-      - tmdb-network
-
-networks:
-  tmdb-network:
-    driver: bridge
+      - grafana-storage:/var/lib/grafana
+      - ./grafana/dashboards:/etc/grafana/provisioning/dashboards
+      - ./grafana/datasources:/etc/grafana/provisioning/datasources
+    depends_on:
+      - postgres
+    restart: always
 
 volumes:
-  postgres-data:
-  redis-data:
-  grafana-data:
+  postgres-db-volume:
+  redis-volume:
+  grafana-storage:
+
+networks:
+  default:
+    name: tmdb-network

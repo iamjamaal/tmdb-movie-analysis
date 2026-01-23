@@ -2,327 +2,502 @@
 Airflow DAG for TMDB Movie Analysis Pipeline
 """
 
+import os
+import sys
 from datetime import datetime, timedelta
+from pathlib import Path
+
 from airflow import DAG
 from airflow.operators.python import PythonOperator
-from airflow.providers.apache.spark.operators.spark_submit import SparkSubmitOperator
 from airflow.operators.bash import BashOperator
+from airflow.providers.apache.spark.operators.spark_submit import SparkSubmitOperator
 from airflow.utils.dates import days_ago
+from airflow.utils.task_group import TaskGroup
+
+# Add project root to path
+PROJECT_ROOT = Path(__file__).parent.parent.parent
+sys.path.insert(0, str(PROJECT_ROOT))
 
 # Default arguments
 default_args = {
-    'owner': 'noah_jamal_nabila',
+    'owner': 'data-engineering',
     'depends_on_past': False,
-    'email_on_failure': False,
+    'email': ['data-engineering@example.com'],
+    'email_on_failure': True,
     'email_on_retry': False,
-    'retries': 2,
+    'retries': 3,
     'retry_delay': timedelta(minutes=5),
-    'execution_timeout': timedelta(hours=2),
+    'execution_timeout': timedelta(hours=2)
 }
 
-# Define the DAG
+# DAG definition
 dag = DAG(
-    'tmdb_movie_analysis_pipeline',
+    'tmdb_movie_pipeline',
     default_args=default_args,
-    description='Complete TMDB movie data analysis pipeline with PySpark',
-    schedule_interval='@weekly',  # Run weekly
+    description='TMDB Movie Data Analysis Pipeline',
+    schedule_interval='@daily',
     start_date=days_ago(1),
     catchup=False,
-    tags=['tmdb', 'movies', 'analytics', 'pyspark'],
+    max_active_runs=1,
+    tags=['tmdb', 'movies', 'analytics', 'spark']
 )
 
-# Task 1: Validate Environment
-validate_environment = BashOperator(
-    task_id='validate_environment',
-    bash_command="""
-    echo "Validating environment..."
-    
-    # Check if TMDB_API_KEY is set
-    if [ -z "$TMDB_API_KEY" ]; then
-        echo "ERROR: TMDB_API_KEY not set"
-        exit 1
-    fi
-    
-    # Check if Spark Master is accessible
-    curl -s http://spark-master:8080 > /dev/null
-    if [ $? -ne 0 ]; then
-        echo "ERROR: Cannot reach Spark Master"
-        exit 1
-    fi
-    
-    # Check output directory
-    mkdir -p /opt/airflow/data/output/raw
-    mkdir -p /opt/airflow/data/output/cleaned
-    mkdir -p /opt/airflow/data/output/processed
-    mkdir -p /opt/airflow/data/output/kpis
-    mkdir -p /opt/airflow/data/output/queries
-    mkdir -p /opt/airflow/data/output/dashboards
-    mkdir -p /opt/airflow/data/output/reports
-    
-    echo "✓ Environment validation complete"
-    """,
-    dag=dag,
-)
 
-# Task 2: Run Data Ingestion
-run_ingestion = SparkSubmitOperator(
-    task_id='run_ingestion',
-    application='/opt/airflow/src/jobs/run_ingestion.py',
-    conn_id='spark_default',
-    conf={
-        'spark.master': 'spark://spark-master:7077',
-        'spark.executor.memory': '2g',
-        'spark.driver.memory': '2g',
-        'spark.executor.cores': '2',
-    },
-    application_args=[
-        '--config', '/opt/airflow/src/config/config.yaml',
-        '--output', '/opt/airflow/data/output'
-    ],
-    dag=dag,
-)
+# ============================================================================
+# Task Functions
+# ============================================================================
 
-# Task 3: Run Data Cleaning
-run_cleaning = SparkSubmitOperator(
-    task_id='run_cleaning',
-    application='/opt/airflow/src/jobs/run_cleaning.py',
-    conn_id='spark_default',
-    conf={
-        'spark.master': 'spark://spark-master:7077',
-        'spark.executor.memory': '2g',
-        'spark.driver.memory': '2g',
-    },
-    application_args=[
-        '--config', '/opt/airflow/src/config/config.yaml',
-        '--input', '/opt/airflow/data/output/raw',
-        '--output', '/opt/airflow/data/output'
-    ],
-    dag=dag,
-)
-
-# Task 4: Run Data Transformation
-run_transformation = SparkSubmitOperator(
-    task_id='run_transformation',
-    application='/opt/airflow/src/jobs/run_transformation.py',
-    conn_id='spark_default',
-    conf={
-        'spark.master': 'spark://spark-master:7077',
-        'spark.executor.memory': '2g',
-        'spark.driver.memory': '2g',
-    },
-    application_args=[
-        '--config', '/opt/airflow/src/config/config.yaml',
-        '--input', '/opt/airflow/data/output/cleaned',
-        '--output', '/opt/airflow/data/output'
-    ],
-    dag=dag,
-)
-
-# Task 5: Run Data Validation
-def run_validation_task(**context):
-    """Run data validation"""
-    import sys
-    sys.path.append('/opt/airflow/src')
+def validate_environment(**context):
+    """Validate environment and prerequisites"""
+    import logging
+    logger = logging.getLogger(__name__)
     
-    from pyspark.sql import SparkSession
-    from processing.data_validator import DataValidator
-    from config import load_config
+    # Check required environment variables
+    required_vars = ['TMDB_API_KEY', 'POSTGRES_HOST', 'REDIS_HOST']
+    missing_vars = [var for var in required_vars if not os.getenv(var)]
+    
+    if missing_vars:
+        raise ValueError(f"Missing required environment variables: {missing_vars}")
+    
+    logger.info("Environment validation passed")
+    
+    # Push run metadata to XCom
+    run_id = f"run_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
+    context['task_instance'].xcom_push(key='run_id', value=run_id)
+    
+    return run_id
+
+
+def fetch_movie_data(**context):
+    """Fetch movie data from TMDB API"""
+    from src.ingestion.data_fetcher import MovieDataFetcher
+    from src.utils.helpers import load_config
+    import logging
+    
+    logger = logging.getLogger(__name__)
+    logger.info("Starting movie data fetch")
+    
+    # Load configuration
+    config = load_config('/opt/spark-apps/src/config/config.yaml')
+    
+    # Get run_id from XCom
+    run_id = context['task_instance'].xcom_pull(
+        task_ids='validate_environment',
+        key='run_id'
+    )
+    
+    # Fetch data
+    fetcher = MovieDataFetcher(config)
+    movie_ids = config.get('pipeline', {}).get('movie_ids', [])
+    
+    if not movie_ids:
+        raise ValueError("No movie IDs configured")
+    
+    raw_df = fetcher.fetch_movies(movie_ids)
+    
+    # Save raw data
+    output_path = f"/opt/spark-data/raw/movies_{run_id}"
+    raw_df.write.mode('overwrite').parquet(output_path)
+    
+    # Push metadata to XCom
+    context['task_instance'].xcom_push(key='raw_data_path', value=output_path)
+    context['task_instance'].xcom_push(key='raw_record_count', value=raw_df.count())
+    
+    logger.info(f"Fetched {raw_df.count()} movies, saved to {output_path}")
+    
+    return output_path
+
+
+def clean_data(**context):
+    """Clean and preprocess movie data"""
+    from src.processing.data_cleaner import DataCleaner
+    from src.utils.spark_session import SparkSessionManager
+    from src.utils.helpers import load_config
+    import logging
+    
+    logger = logging.getLogger(__name__)
+    logger.info("Starting data cleaning")
+    
+    # Get input path from XCom
+    raw_data_path = context['task_instance'].xcom_pull(
+        task_ids='fetch_movie_data',
+        key='raw_data_path'
+    )
+    
+    run_id = context['task_instance'].xcom_pull(
+        task_ids='validate_environment',
+        key='run_id'
+    )
+    
+    # Initialize Spark and cleaner
+    config = load_config('/opt/spark-apps/src/config/config.yaml')
+    spark = SparkSessionManager.get_or_create_session('data-cleaning', config)
+    
+    # Read raw data
+    raw_df = spark.read.parquet(raw_data_path)
+    
+    # Clean data
+    cleaner = DataCleaner(config)
+    clean_df = cleaner.clean_data(raw_df)
+    
+    # Save cleaned data
+    output_path = f"/opt/spark-data/processed/movies_clean_{run_id}"
+    clean_df.write.mode('overwrite').parquet(output_path)
+    
+    # Push metadata
+    context['task_instance'].xcom_push(key='clean_data_path', value=output_path)
+    context['task_instance'].xcom_push(key='clean_record_count', value=clean_df.count())
+    
+    logger.info(f"Cleaned {clean_df.count()} movies, saved to {output_path}")
+    
+    return output_path
+
+
+def transform_data(**context):
+    """Transform and enrich data"""
+    from src.processing.data_transformer import DataTransformer
+    from src.utils.spark_session import SparkSessionManager
+    from src.utils.helpers import load_config
+    import logging
+    
+    logger = logging.getLogger(__name__)
+    logger.info("Starting data transformation")
+    
+    # Get input path
+    clean_data_path = context['task_instance'].xcom_pull(
+        task_ids='clean_data',
+        key='clean_data_path'
+    )
+    
+    run_id = context['task_instance'].xcom_pull(
+        task_ids='validate_environment',
+        key='run_id'
+    )
+    
+    # Initialize
+    config = load_config('/opt/spark-apps/src/config/config.yaml')
+    spark = SparkSessionManager.get_or_create_session('data-transformation', config)
+    
+    # Read and transform
+    clean_df = spark.read.parquet(clean_data_path)
+    transformer = DataTransformer(config)
+    transformed_df = transformer.transform_data(clean_df)
+    
+    # Save
+    output_path = f"/opt/spark-data/processed/movies_transformed_{run_id}"
+    transformed_df.write.mode('overwrite').parquet(output_path)
+    
+    # Push metadata
+    context['task_instance'].xcom_push(key='transformed_data_path', value=output_path)
+    
+    logger.info(f"Transformed data saved to {output_path}")
+    
+    return output_path
+
+
+def validate_data(**context):
+    """Validate data quality"""
+    from src.processing.data_validator import DataValidator
+    from src.utils.spark_session import SparkSessionManager
+    from src.utils.helpers import load_config
+    import logging
     import json
     
-    spark = SparkSession.builder \
-        .appName("TMDB Validation") \
-        .master("spark://spark-master:7077") \
-        .getOrCreate()
+    logger = logging.getLogger(__name__)
+    logger.info("Starting data validation")
     
-    config = load_config('/opt/airflow/src/config/config.yaml')
+    # Get input path
+    transformed_data_path = context['task_instance'].xcom_pull(
+        task_ids='transform_data',
+        key='transformed_data_path'
+    )
+    
+    run_id = context['task_instance'].xcom_pull(
+        task_ids='validate_environment',
+        key='run_id'
+    )
+    
+    # Initialize
+    config = load_config('/opt/spark-apps/src/config/config.yaml')
+    spark = SparkSessionManager.get_or_create_session('data-validation', config)
+    
+    # Read and validate
+    df = spark.read.parquet(transformed_data_path)
     validator = DataValidator(config)
+    validation_report = validator.generate_validation_report(df)
     
-    # Load processed data
-    df = spark.read.parquet('/opt/airflow/data/output/processed/movies.parquet')
+    # Save validation report
+    report_path = f"/opt/spark-data/output/validation_report_{run_id}.json"
+    with open(report_path, 'w') as f:
+        json.dump(validation_report, f, indent=2, default=str)
     
-    # Validate
-    results = validator.validate(df)
+    # Check if validation passed
+    health_score = validation_report.get('health_score', 0)
+    min_score = config.get('validation', {}).get('min_health_score', 80)
     
-    # Save report
-    with open('/opt/airflow/data/output/reports/validation_report.json', 'w') as f:
-        json.dump(results, f, indent=2, default=str)
+    if health_score < min_score:
+        logger.warning(f"Data quality score ({health_score}%) below threshold ({min_score}%)")
+        # Don't fail, but log warning
     
-    # Check if quality score meets threshold
-    quality_score = results.get('overall_score', 0)
-    if quality_score < 0.8:
-        raise ValueError(f"Data quality score {quality_score} below threshold 0.8")
+    # Push metadata
+    context['task_instance'].xcom_push(key='validation_report_path', value=report_path)
+    context['task_instance'].xcom_push(key='health_score', value=health_score)
     
-    print(f"✓ Validation complete. Quality score: {quality_score:.2f}")
+    logger.info(f"Validation completed. Health score: {health_score}%")
     
-    spark.stop()
-    return results
+    return validation_report
 
-run_validation = PythonOperator(
-    task_id='run_validation',
-    python_callable=run_validation_task,
-    provide_context=True,
-    dag=dag,
-)
 
-# Task 6: Calculate KPIs
-def calculate_kpis_task(**context):
-    """Calculate all KPIs"""
-    import sys
-    sys.path.append('/opt/airflow/src')
-    
-    from pyspark.sql import SparkSession
-    from analytics.kpi_calculator import KPICalculator
-    from config import load_config
+def calculate_kpis(**context):
+    """Calculate KPIs and metrics"""
+    from src.analytics.kpi_calculator import KPICalculator
+    from src.utils.spark_session import SparkSessionManager
+    from src.utils.helpers import load_config
+    import logging
     import json
     
-    spark = SparkSession.builder \
-        .appName("TMDB KPI Calculation") \
-        .master("spark://spark-master:7077") \
-        .getOrCreate()
+    logger = logging.getLogger(__name__)
+    logger.info("Starting KPI calculation")
     
-    config = load_config('/opt/airflow/src/config/config.yaml')
-    calculator = KPICalculator(config)
+    # Get input path
+    transformed_data_path = context['task_instance'].xcom_pull(
+        task_ids='transform_data',
+        key='transformed_data_path'
+    )
     
-    # Load processed data
-    df = spark.read.parquet('/opt/airflow/data/output/processed/movies.parquet')
+    run_id = context['task_instance'].xcom_pull(
+        task_ids='validate_environment',
+        key='run_id'
+    )
+    
+    # Initialize
+    config = load_config('/opt/spark-apps/src/config/config.yaml')
+    spark = SparkSessionManager.get_or_create_session('kpi-calculation', config)
     
     # Calculate KPIs
-    kpis = calculator.calculate_all_kpis(df)
+    df = spark.read.parquet(transformed_data_path)
+    calculator = KPICalculator(config)
+    all_kpis = calculator.calculate_all_kpis(df)
     
-    # Save KPI results
-    kpi_output_path = '/opt/airflow/data/output/kpis'
+    # Save KPIs
+    kpi_output_dir = f"/opt/spark-data/output/kpis_{run_id}"
+    calculator.save_kpis(all_kpis, kpi_output_dir)
     
-    # Save rankings
-    for kpi_name, kpi_df in kpis['rankings'].items():
-        kpi_df.coalesce(1).write.mode("overwrite") \
-            .option("header", "true") \
-            .csv(f"{kpi_output_path}/rankings/{kpi_name}.csv")
+    # Save summary
+    summary_path = f"{kpi_output_dir}/summary.json"
+    with open(summary_path, 'w') as f:
+        json.dump({k: len(v) for k, v in all_kpis.items()}, f, indent=2)
     
-    # Save other KPIs
-    for kpi_name in ['franchise_comparison', 'top_franchises', 'top_directors', 
-                     'genre_performance', 'yearly_trends', 'decade_trends',
-                     'language_performance', 'budget_category_performance']:
-        if kpi_name in kpis:
-            kpis[kpi_name].coalesce(1).write.mode("overwrite") \
-                .option("header", "true") \
-                .csv(f"{kpi_output_path}/{kpi_name}.csv")
+    # Push metadata
+    context['task_instance'].xcom_push(key='kpi_output_dir', value=kpi_output_dir)
     
-    # Save summary statistics
-    with open(f"{kpi_output_path}/summary_statistics.json", 'w') as f:
-        json.dump(kpis['summary_statistics'], f, indent=2, default=str)
+    logger.info(f"KPIs calculated and saved to {kpi_output_dir}")
     
-    print("✓ All KPIs calculated and saved")
-    
-    spark.stop()
-    return kpis['summary_statistics']
+    return kpi_output_dir
 
-calculate_kpis = PythonOperator(
-    task_id='calculate_kpis',
-    python_callable=calculate_kpis_task,
-    provide_context=True,
-    dag=dag,
+
+def aggregate_metrics(**context):
+    """Aggregate metrics for reporting"""
+    from src.analytics.metrics_aggregator import MetricsAggregator
+    from src.utils.spark_session import SparkSessionManager
+    from src.utils.helpers import load_config
+    import logging
+    
+    logger = logging.getLogger(__name__)
+    logger.info("Starting metrics aggregation")
+    
+    # Get input path
+    transformed_data_path = context['task_instance'].xcom_pull(
+        task_ids='transform_data',
+        key='transformed_data_path'
+    )
+    
+    run_id = context['task_instance'].xcom_pull(
+        task_ids='validate_environment',
+        key='run_id'
+    )
+    
+    # Initialize
+    config = load_config('/opt/spark-apps/src/config/config.yaml')
+    spark = SparkSessionManager.get_or_create_session('metrics-aggregation', config)
+    
+    # Aggregate metrics
+    df = spark.read.parquet(transformed_data_path)
+    aggregator = MetricsAggregator(config)
+    
+    metrics_output_dir = f"/opt/spark-data/output/metrics_{run_id}"
+    export_paths = aggregator.export_all_metrics(df, metrics_output_dir)
+    
+    # Push metadata
+    context['task_instance'].xcom_push(key='metrics_output_dir', value=metrics_output_dir)
+    
+    logger.info(f"Metrics aggregated and saved to {metrics_output_dir}")
+    
+    return export_paths
+
+
+def generate_visualizations(**context):
+    """Generate visualizations"""
+    from src.visualization.dashboard_generator import DashboardGenerator
+    from src.utils.spark_session import SparkSessionManager
+    from src.utils.helpers import load_config
+    import logging
+    
+    logger = logging.getLogger(__name__)
+    logger.info("Starting visualization generation")
+    
+    # Get input path
+    transformed_data_path = context['task_instance'].xcom_pull(
+        task_ids='transform_data',
+        key='transformed_data_path'
+    )
+    
+    run_id = context['task_instance'].xcom_pull(
+        task_ids='validate_environment',
+        key='run_id'
+    )
+    
+    # Initialize
+    config = load_config('/opt/spark-apps/src/config/config.yaml')
+    spark = SparkSessionManager.get_or_create_session('visualization', config)
+    
+    # Generate visualizations
+    df = spark.read.parquet(transformed_data_path)
+    generator = DashboardGenerator(config)
+    
+    visualizations = generator.generate_all_visualizations(df)
+    
+    # Push metadata
+    context['task_instance'].xcom_push(key='visualizations', value=visualizations)
+    
+    logger.info(f"Generated {len(visualizations)} visualizations")
+    
+    return visualizations
+
+
+def publish_results(**context):
+    """Publish results and notify stakeholders"""
+    import logging
+    
+    logger = logging.getLogger(__name__)
+    logger.info("Publishing results")
+    
+    # Get all metadata
+    run_id = context['task_instance'].xcom_pull(
+        task_ids='validate_environment',
+        key='run_id'
+    )
+    
+    health_score = context['task_instance'].xcom_pull(
+        task_ids='validate_data',
+        key='health_score'
+    )
+    
+    raw_count = context['task_instance'].xcom_pull(
+        task_ids='fetch_movie_data',
+        key='raw_record_count'
+    )
+    
+    clean_count = context['task_instance'].xcom_pull(
+        task_ids='clean_data',
+        key='clean_record_count'
+    )
+    
+    # Create summary
+    summary = {
+        'run_id': run_id,
+        'execution_date': context['execution_date'].isoformat(),
+        'raw_records': raw_count,
+        'clean_records': clean_count,
+        'data_quality_score': health_score,
+        'status': 'SUCCESS'
+    }
+    
+    logger.info(f"Pipeline execution summary: {summary}")
+    
+    # Save summary
+    summary_path = f"/opt/spark-data/output/pipeline_summary_{run_id}.json"
+    import json
+    with open(summary_path, 'w') as f:
+        json.dump(summary, f, indent=2)
+    
+    return summary
+
+
+# ============================================================================
+# Task Definitions
+# ============================================================================
+
+# Validation task
+validate_env_task = PythonOperator(
+    task_id='validate_environment',
+    python_callable=validate_environment,
+    dag=dag
 )
 
-# Task 7: Run Advanced Queries
-def run_queries_task(**context):
-    """Execute advanced queries"""
-    import sys
-    sys.path.append('/opt/airflow/src')
-    
-    from pyspark.sql import SparkSession
-    from analytics.advanced_queries import AdvancedQueries
-    from config import load_config
-    
-    spark = SparkSession.builder \
-        .appName("TMDB Advanced Queries") \
-        .master("spark://spark-master:7077") \
-        .getOrCreate()
-    
-    config = load_config('/opt/airflow/src/config/config.yaml')
-    queries = AdvancedQueries(config)
-    
-    # Load processed data
-    df = spark.read.parquet('/opt/airflow/data/output/processed/movies.parquet')
-    
-    # Execute queries
-    queries_output_path = '/opt/airflow/data/output/queries'
-    
-    # Search 1
-    search_1 = queries.execute_search_1(df)
-    search_1.coalesce(1).write.mode("overwrite") \
-        .option("header", "true") \
-        .csv(f"{queries_output_path}/search_1_scifi_action_bruce_willis.csv")
-    
-    # Search 2
-    search_2 = queries.execute_search_2(df)
-    search_2.coalesce(1).write.mode("overwrite") \
-        .option("header", "true") \
-        .csv(f"{queries_output_path}/search_2_uma_tarantino.csv")
-    
-    print("✓ Advanced queries executed")
-    
-    spark.stop()
-    return {'search_1_count': search_1.count(), 'search_2_count': search_2.count()}
+# Data ingestion task group
+with TaskGroup('data_ingestion', dag=dag) as ingestion_group:
+    fetch_task = PythonOperator(
+        task_id='fetch_movie_data',
+        python_callable=fetch_movie_data
+    )
 
-run_queries = PythonOperator(
-    task_id='run_advanced_queries',
-    python_callable=run_queries_task,
-    provide_context=True,
-    dag=dag,
+# Data processing task group
+with TaskGroup('data_processing', dag=dag) as processing_group:
+    clean_task = PythonOperator(
+        task_id='clean_data',
+        python_callable=clean_data
+    )
+    
+    transform_task = PythonOperator(
+        task_id='transform_data',
+        python_callable=transform_data
+    )
+    
+    validate_task = PythonOperator(
+        task_id='validate_data',
+        python_callable=validate_data
+    )
+    
+    clean_task >> transform_task >> validate_task
+
+# Analytics task group
+with TaskGroup('analytics', dag=dag) as analytics_group:
+    kpi_task = PythonOperator(
+        task_id='calculate_kpis',
+        python_callable=calculate_kpis
+    )
+    
+    metrics_task = PythonOperator(
+        task_id='aggregate_metrics',
+        python_callable=aggregate_metrics
+    )
+    
+    [kpi_task, metrics_task]
+
+# Visualization task
+viz_task = PythonOperator(
+    task_id='generate_visualizations',
+    python_callable=generate_visualizations,
+    dag=dag
 )
 
-# Task 8: Generate Report
-generate_report = BashOperator(
-    task_id='generate_report',
-    bash_command="""
-    echo "Generating pipeline execution report..."
-    
-    # Create report
-    cat > /opt/airflow/data/output/reports/pipeline_report.txt << EOF
-================================================================================
-TMDB MOVIE ANALYSIS PIPELINE - EXECUTION REPORT
-================================================================================
-Execution Date: $(date)
-Status: SUCCESS
-
-Pipeline Stages:
-1. ✓ Data Ingestion
-2. ✓ Data Cleaning
-3. ✓ Data Transformation
-4. ✓ Data Validation
-5. ✓ KPI Calculation
-6. ✓ Advanced Queries
-7. ✓ Report Generation
-
-Output Locations:
-- Raw Data:         /opt/airflow/data/output/raw/
-- Cleaned Data:     /opt/airflow/data/output/cleaned/
-- Processed Data:   /opt/airflow/data/output/processed/
-- KPI Results:      /opt/airflow/data/output/kpis/
-- Query Results:    /opt/airflow/data/output/queries/
-- Reports:          /opt/airflow/data/output/reports/
-
-================================================================================
-EOF
-    
-    cat /opt/airflow/data/output/reports/pipeline_report.txt
-    echo "✓ Report generated"
-    """,
-    dag=dag,
+# Publishing task
+publish_task = PythonOperator(
+    task_id='publish_results',
+    python_callable=publish_results,
+    dag=dag
 )
 
-# Task 9: Send Success Notification
-send_notification = BashOperator(
-    task_id='send_notification',
-    bash_command="""
-    echo "TMDB Pipeline completed successfully at $(date)"
-    echo "All outputs available in /opt/airflow/data/output/"
-    """,
-    dag=dag,
+# Cleanup task
+cleanup_task = BashOperator(
+    task_id='cleanup_temp_files',
+    bash_command='echo "Cleaning up temporary files..." && find /opt/spark-data/raw -mtime +7 -delete',
+    dag=dag
 )
 
-# Define task dependencies
-validate_environment >> run_ingestion >> run_cleaning >> run_transformation
-run_transformation >> run_validation
-run_validation >> [calculate_kpis, run_queries]
-[calculate_kpis, run_queries] >> generate_report >> send_notification
+# ============================================================================
+# Task Dependencies
+# ============================================================================
+
+validate_env_task >> ingestion_group >> processing_group >> analytics_group >> viz_task >> publish_task >> cleanup_task

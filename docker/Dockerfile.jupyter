@@ -2,17 +2,35 @@ FROM jupyter/pyspark-notebook:latest
 
 USER root
 
-# Install additional packages
+# Install additional system packages
 RUN apt-get update && apt-get install -y \
     vim \
     curl \
+    git \
     && rm -rf /var/lib/apt/lists/*
 
 USER jovyan
 
-# Install Python packages
-COPY requirements-airflow.txt /tmp/
-RUN pip install --no-cache-dir -r /tmp/requirements-airflow.txt
+# Install Python dependencies
+COPY requirements.txt /tmp/requirements.txt
+RUN pip install --no-cache-dir -r /tmp/requirements.txt
+
+# Install JupyterLab extensions
+RUN pip install --no-cache-dir \
+    jupyterlab-git \
+    jupyterlab-lsp \
+    python-lsp-server[all] \
+    jupyter-resource-usage
+
+# Configure Spark
+ENV SPARK_OPTS="--driver-memory 4g --executor-memory 4g"
+ENV PYSPARK_SUBMIT_ARGS="--master spark://spark-master:7077 pyspark-shell"
 
 # Set working directory
-WORKDIR /home/jovyan/work
+WORKDIR /home/jovyan
+
+# Expose JupyterLab port
+EXPOSE 8888
+
+# Start JupyterLab
+CMD ["start-notebook.sh", "--NotebookApp.token=''", "--NotebookApp.password=''"]

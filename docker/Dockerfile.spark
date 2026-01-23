@@ -1,46 +1,46 @@
-FROM apache/spark:3.5.0
+FROM bitnami/spark:3.5.0
 
 USER root
 
-# Install Python dependencies
+# Install system dependencies
 RUN apt-get update && apt-get install -y \
     python3-pip \
     curl \
     vim \
+    git \
+    wget \
+    build-essential \
     && rm -rf /var/lib/apt/lists/*
 
-# Create directories with proper permissions
-RUN mkdir -p /opt/spark-apps /opt/spark-data /opt/notebooks /opt/spark/work && \
-    chown -R 1001:0 /opt/spark-apps /opt/spark-data /opt/notebooks /opt/spark/work && \
-    chmod -R 775 /opt/spark/work
+# Create directories
+RUN mkdir -p /opt/spark-apps /opt/spark-data /opt/logs \
+    && chmod -R 777 /opt/spark-apps /opt/spark-data /opt/logs
 
-# Copy requirements
-COPY requirements-spark.txt /tmp/requirements.txt
-
-# Install Python packages
+# Install Python dependencies
+COPY requirements.txt /tmp/requirements.txt
 RUN pip3 install --no-cache-dir -r /tmp/requirements.txt
+
+# Copy application code
+COPY src/ /opt/spark-apps/src/
+
+# Set environment variables
+ENV PYTHONPATH=/opt/spark-apps:$PYTHONPATH
+ENV SPARK_HOME=/opt/bitnami/spark
+ENV PATH=$SPARK_HOME/bin:$PATH
+
+# Configure Spark
+RUN echo "spark.driver.extraJavaOptions -Dlog4j.configuration=file:///opt/bitnami/spark/conf/log4j.properties" >> $SPARK_HOME/conf/spark-defaults.conf && \
+    echo "spark.executor.extraJavaOptions -Dlog4j.configuration=file:///opt/bitnami/spark/conf/log4j.properties" >> $SPARK_HOME/conf/spark-defaults.conf
 
 # Set working directory
 WORKDIR /opt/spark-apps
 
-# Copy application source code
-COPY src/ /opt/spark-apps/
-
-# Set environment variables
-ENV PYTHONPATH=/opt/spark-apps
-ENV PYSPARK_PYTHON=python3
-ENV PYSPARK_DRIVER_PYTHON=python3
-ENV SPARK_USER=spark
-
-# Expose ports
-EXPOSE 4040 7077 8080 8081
-
-# Run as spark user (keep original image user)
+# Switch back to spark user
 USER 1001
 
-# Start Spark master or worker based on SPARK_MODE environment variable
-CMD if [ "$SPARK_MODE" = "master" ]; then \
-      /opt/spark/bin/spark-class org.apache.spark.deploy.master.Master; \
-    else \
-      /opt/spark/bin/spark-class org.apache.spark.deploy.worker.Worker $SPARK_MASTER_URL; \
-    fi
+# Health check
+HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
+    CMD curl -f http://localhost:8080/ || exit 1
+
+# Default command (overridden by docker-compose)
+CMD ["/opt/bitnami/scripts/spark/run.sh"]
