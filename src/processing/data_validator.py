@@ -70,6 +70,7 @@ class DataValidator:
             completeness_pct = ((total_rows - null_count) / total_rows * 100) if total_rows > 0 else 0
             
             completeness_report['column_completeness'][col] = {
+                
                 'null_count': null_count,
                 'non_null_count': total_rows - null_count,
                 'completeness_percentage': round(completeness_pct, 2)

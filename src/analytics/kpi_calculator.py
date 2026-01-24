@@ -1,7 +1,8 @@
 """
 KPI Calculator - Calculate and analyze Key Performance Indicators
 """
-
+import os
+import json
 import logging
 from typing import Dict, Any, List, Optional
 from pyspark.sql import DataFrame
@@ -69,11 +70,17 @@ class KPICalculator:
             F.row_number().over(Window.orderBy(F.col(column).asc() if ascending else F.col(column).desc()))
         )
         
-        # Select relevant columns
-        result = ranked_df.select(
-            "rank", "id", "title", "release_year", column,
-            "budget_musd", "revenue_musd", "vote_average", "vote_count"
-        )
+        # Select relevant columns (avoid duplicate columns)
+        base_columns = ["rank", "id", "title", "release_year"]
+        metric_columns = ["budget_musd", "revenue_musd", "vote_average", "vote_count"]
+        
+        # Add the ranking column if it's not already in the base metrics
+        if column not in base_columns and column not in metric_columns:
+            columns_to_select = base_columns + [column] + metric_columns
+        else:
+            columns_to_select = base_columns + metric_columns
+        
+        result = ranked_df.select(*columns_to_select)
         
         count = result.count()
         logger.info(f"{metric_name}: {count} movies ranked")
@@ -397,3 +404,47 @@ class KPICalculator:
         logger.info("All KPIs calculated successfully")
         
         return kpis
+
+
+    def save_kpis(self, kpis: Dict[str, Any], output_dir: str) -> None:
+        """
+        Persist KPI results to disk
+
+        - DataFrames → Parquet
+        - Dict summaries → JSON
+        - Nested rankings handled properly
+        """
+        logger.info(f"Saving KPIs to {output_dir}")
+
+        os.makedirs(output_dir, exist_ok=True)
+
+        for kpi_name, kpi_value in kpis.items():
+
+            # Case 1: Spark DataFrame
+            if isinstance(kpi_value, DataFrame):
+                path = os.path.join(output_dir, kpi_name)
+                logger.info(f"Saving KPI: {kpi_name}")
+                kpi_value.write.mode("overwrite").parquet(path)
+
+            # Case 2: Dict - check if it contains DataFrames or primitives
+            elif isinstance(kpi_value, dict):
+                # Check first value to determine dict type
+                first_value = next(iter(kpi_value.values())) if kpi_value else None
+                
+                if isinstance(first_value, DataFrame):
+                    # Dict of DataFrames (e.g., rankings)
+                    for sub_name, df in kpi_value.items():
+                        path = os.path.join(output_dir, kpi_name, sub_name)
+                        logger.info(f"Saving KPI: {kpi_name}/{sub_name}")
+                        df.write.mode("overwrite").parquet(path)
+                else:
+                    # Dict of primitives (e.g., summary statistics)
+                    path = os.path.join(output_dir, f"{kpi_name}.json")
+                    logger.info(f"Saving KPI summary: {kpi_name}")
+                    with open(path, "w") as f:
+                        json.dump(kpi_value, f, indent=2)
+
+            else:
+                logger.warning(f"Skipping unsupported KPI type: {kpi_name}")
+
+        logger.info("All KPIs saved successfully")

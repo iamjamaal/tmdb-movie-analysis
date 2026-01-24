@@ -1,4 +1,4 @@
-FROM bitnami/spark:3.5.0
+FROM apache/spark:3.5.0
 
 USER root
 
@@ -17,30 +17,32 @@ RUN mkdir -p /opt/spark-apps /opt/spark-data /opt/logs \
     && chmod -R 777 /opt/spark-apps /opt/spark-data /opt/logs
 
 # Install Python dependencies
-COPY requirements.txt /tmp/requirements.txt
+COPY requirements-spark.txt /tmp/requirements.txt
 RUN pip3 install --no-cache-dir -r /tmp/requirements.txt
 
 # Copy application code
 COPY src/ /opt/spark-apps/src/
 
+# Copy entrypoint script
+COPY docker/spark-entrypoint.sh /usr/local/bin/spark-entrypoint.sh
+RUN chmod +x /usr/local/bin/spark-entrypoint.sh
+
 # Set environment variables
 ENV PYTHONPATH=/opt/spark-apps:$PYTHONPATH
-ENV SPARK_HOME=/opt/bitnami/spark
+ENV SPARK_HOME=/opt/spark
 ENV PATH=$SPARK_HOME/bin:$PATH
 
-# Configure Spark
-RUN echo "spark.driver.extraJavaOptions -Dlog4j.configuration=file:///opt/bitnami/spark/conf/log4j.properties" >> $SPARK_HOME/conf/spark-defaults.conf && \
-    echo "spark.executor.extraJavaOptions -Dlog4j.configuration=file:///opt/bitnami/spark/conf/log4j.properties" >> $SPARK_HOME/conf/spark-defaults.conf
+# Create Spark config directory if it doesn't exist and configure Spark
+RUN mkdir -p $SPARK_HOME/conf && \
+    touch $SPARK_HOME/conf/spark-defaults.conf && \
+    echo "spark.driver.extraJavaOptions -Dlog4j.configuration=file://$SPARK_HOME/conf/log4j.properties" >> $SPARK_HOME/conf/spark-defaults.conf && \
+    echo "spark.executor.extraJavaOptions -Dlog4j.configuration=file://$SPARK_HOME/conf/log4j.properties" >> $SPARK_HOME/conf/spark-defaults.conf
 
 # Set working directory
 WORKDIR /opt/spark-apps
 
 # Switch back to spark user
-USER 1001
+USER 185
 
-# Health check
-HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
-    CMD curl -f http://localhost:8080/ || exit 1
-
-# Default command (overridden by docker-compose)
-CMD ["/opt/bitnami/scripts/spark/run.sh"]
+# Use entrypoint script
+ENTRYPOINT ["/usr/local/bin/spark-entrypoint.sh"]

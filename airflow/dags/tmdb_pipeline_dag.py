@@ -20,9 +20,9 @@ sys.path.insert(0, str(PROJECT_ROOT))
 
 # Default arguments
 default_args = {
-    'owner': 'data-engineering',
+    'owner': 'noah_jamal_nabila',
     'depends_on_past': False,
-    'email': ['data-engineering@example.com'],
+    'email': ['noah_jamal_nabila@example.com'],
     'email_on_failure': True,
     'email_on_retry': False,
     'retries': 3,
@@ -70,8 +70,10 @@ def validate_environment(**context):
 
 def fetch_movie_data(**context):
     """Fetch movie data from TMDB API"""
-    from src.ingestion.data_fetcher import MovieDataFetcher
+    from src.ingestion.data_fetcher import DataFetcher
     from src.utils.helpers import load_config
+    from src.utils.spark_session import SparkSessionManager
+
     import logging
     
     logger = logging.getLogger(__name__)
@@ -86,9 +88,12 @@ def fetch_movie_data(**context):
         key='run_id'
     )
     
+    # Create Spark session
+    spark = SparkSessionManager.get_or_create_session('data-fetching', config)
+    
     # Fetch data
-    fetcher = MovieDataFetcher(config)
-    movie_ids = config.get('pipeline', {}).get('movie_ids', [])
+    fetcher = DataFetcher(spark, config)
+    movie_ids = config.get('data', {}).get('movie_ids', [])
     
     if not movie_ids:
         raise ValueError("No movie IDs configured")
@@ -97,7 +102,7 @@ def fetch_movie_data(**context):
     
     # Save raw data
     output_path = f"/opt/spark-data/raw/movies_{run_id}"
-    raw_df.write.mode('overwrite').parquet(output_path)
+    fetcher.save_raw_data(raw_df, output_path)
     
     # Push metadata to XCom
     context['task_instance'].xcom_push(key='raw_data_path', value=output_path)
@@ -120,7 +125,7 @@ def clean_data(**context):
     
     # Get input path from XCom
     raw_data_path = context['task_instance'].xcom_pull(
-        task_ids='fetch_movie_data',
+        task_ids='data_ingestion.fetch_movie_data',
         key='raw_data_path'
     )
     
@@ -133,12 +138,12 @@ def clean_data(**context):
     config = load_config('/opt/spark-apps/src/config/config.yaml')
     spark = SparkSessionManager.get_or_create_session('data-cleaning', config)
     
-    # Read raw data
-    raw_df = spark.read.parquet(raw_data_path)
+    # Read raw data (data_fetcher saves to {path}/raw/movies.parquet)
+    raw_df = spark.read.parquet(f"{raw_data_path}/raw/movies.parquet")
     
     # Clean data
     cleaner = DataCleaner(config)
-    clean_df = cleaner.clean_data(raw_df)
+    clean_df = cleaner.clean(raw_df)
     
     # Save cleaned data
     output_path = f"/opt/spark-data/processed/movies_clean_{run_id}"
@@ -165,7 +170,7 @@ def transform_data(**context):
     
     # Get input path
     clean_data_path = context['task_instance'].xcom_pull(
-        task_ids='clean_data',
+        task_ids='data_processing.clean_data',
         key='clean_data_path'
     )
     
@@ -181,7 +186,7 @@ def transform_data(**context):
     # Read and transform
     clean_df = spark.read.parquet(clean_data_path)
     transformer = DataTransformer(config)
-    transformed_df = transformer.transform_data(clean_df)
+    transformed_df = transformer.transform(clean_df)
     
     # Save
     output_path = f"/opt/spark-data/processed/movies_transformed_{run_id}"
@@ -206,20 +211,89 @@ def validate_data(**context):
     logger = logging.getLogger(__name__)
     logger.info("Starting data validation")
     
+    ti = context['task_instance']
+    
     # Get input path
-    transformed_data_path = context['task_instance'].xcom_pull(
-        task_ids='transform_data',
+    transformed_data_path = ti.xcom_pull(
+        task_ids='data_processing.transform_data',
         key='transformed_data_path'
     )
     
-    run_id = context['task_instance'].xcom_pull(
+    run_id = ti.xcom_pull(
         task_ids='validate_environment',
         key='run_id'
     )
     
-    # Initialize
-    config = load_config('/opt/spark-apps/src/config/config.yaml')
-    spark = SparkSessionManager.get_or_create_session('data-validation', config)
+    
+    # Defensive checks
+    if not transformed_data_path:
+        raise ValueError("transformed_data_path not found in XCom")
+    
+    if not run_id:
+        raise ValueError("run_id not found in XCom")
+    
+    logger.info(f"Validating data at {transformed_data_path} for run {run_id}")
+    logger.info(f"Run ID: {run_id}")
+    
+    
+    
+    # ------------------------------------------------------------------
+    # Spark + validation
+    # ------------------------------------------------------------------
+    config = load_config("/opt/spark-apps/src/config/config.yaml")
+    spark = SparkSessionManager.get_or_create_session(
+        app_name="data-validation",
+        config=config
+    )
+
+    try:
+        df = spark.read.parquet(transformed_data_path)
+
+        validator = DataValidator(config)
+        validation_report = validator.generate_validation_report(df)
+
+        # ------------------------------------------------------------------
+        # Persist validation report
+        # ------------------------------------------------------------------
+        report_path = f"/opt/spark-data/output/validation_report_{run_id}.json"
+        with open(report_path, "w") as f:
+            json.dump(validation_report, f, indent=2, default=str)
+
+        health_score = validation_report.get("health_score", 0)
+        min_score = config.get("validation", {}).get("min_health_score", 80)
+
+        if health_score < min_score:
+            logger.warning(
+                f"Data quality score ({health_score}%) "
+                f"below threshold ({min_score}%)"
+            )
+
+        # ------------------------------------------------------------------
+        # Push metadata only (NOT full report)
+        # ------------------------------------------------------------------
+        ti.xcom_push(
+            key="validation_report_path",
+            value=report_path
+        )
+        ti.xcom_push(
+            key="health_score",
+            value=health_score
+        )
+
+        logger.info(f"Validation completed. Health score: {health_score}%")
+
+        # Safe XCom return
+        return {
+            "health_score": health_score,
+            "validation_report_path": report_path
+        }
+
+    finally:
+        # ------------------------------------------------------------------
+        # Always stop Spark
+        # ------------------------------------------------------------------
+        spark.stop()
+        logger.info("Spark session stopped")
     
     # Read and validate
     df = spark.read.parquet(transformed_data_path)
@@ -240,8 +314,8 @@ def validate_data(**context):
         # Don't fail, but log warning
     
     # Push metadata
-    context['task_instance'].xcom_push(key='validation_report_path', value=report_path)
-    context['task_instance'].xcom_push(key='health_score', value=health_score)
+    ti.xcom_push(key='validation_report_path', value=report_path)
+    ti.xcom_push(key='health_score', value=health_score)
     
     logger.info(f"Validation completed. Health score: {health_score}%")
     
@@ -261,7 +335,7 @@ def calculate_kpis(**context):
     
     # Get input path
     transformed_data_path = context['task_instance'].xcom_pull(
-        task_ids='transform_data',
+        task_ids='data_processing.transform_data',
         key='transformed_data_path'
     )
     
@@ -283,10 +357,19 @@ def calculate_kpis(**context):
     kpi_output_dir = f"/opt/spark-data/output/kpis_{run_id}"
     calculator.save_kpis(all_kpis, kpi_output_dir)
     
-    # Save summary
+    # Save summary - handle different types
     summary_path = f"{kpi_output_dir}/summary.json"
+    summary = {}
+    for k, v in all_kpis.items():
+        if isinstance(v, dict):
+            summary[k] = len(v)
+        elif hasattr(v, 'count'):  # DataFrame
+            summary[k] = v.count()
+        else:
+            summary[k] = str(type(v).__name__)
+    
     with open(summary_path, 'w') as f:
-        json.dump({k: len(v) for k, v in all_kpis.items()}, f, indent=2)
+        json.dump(summary, f, indent=2)
     
     # Push metadata
     context['task_instance'].xcom_push(key='kpi_output_dir', value=kpi_output_dir)
@@ -308,7 +391,7 @@ def aggregate_metrics(**context):
     
     # Get input path
     transformed_data_path = context['task_instance'].xcom_pull(
-        task_ids='transform_data',
+        task_ids='data_processing.transform_data',
         key='transformed_data_path'
     )
     
@@ -348,7 +431,7 @@ def generate_visualizations(**context):
     
     # Get input path
     transformed_data_path = context['task_instance'].xcom_pull(
-        task_ids='transform_data',
+        task_ids='data_processing.transform_data',
         key='transformed_data_path'
     )
     
@@ -389,17 +472,17 @@ def publish_results(**context):
     )
     
     health_score = context['task_instance'].xcom_pull(
-        task_ids='validate_data',
+        task_ids='data_processing.validate_data',
         key='health_score'
     )
     
     raw_count = context['task_instance'].xcom_pull(
-        task_ids='fetch_movie_data',
+        task_ids='data_ingestion.fetch_movie_data',
         key='raw_record_count'
     )
     
     clean_count = context['task_instance'].xcom_pull(
-        task_ids='clean_data',
+        task_ids='data_processing.clean_data',
         key='clean_record_count'
     )
     
@@ -439,24 +522,28 @@ validate_env_task = PythonOperator(
 with TaskGroup('data_ingestion', dag=dag) as ingestion_group:
     fetch_task = PythonOperator(
         task_id='fetch_movie_data',
-        python_callable=fetch_movie_data
+        python_callable=fetch_movie_data,
+        dag=dag
     )
 
 # Data processing task group
 with TaskGroup('data_processing', dag=dag) as processing_group:
     clean_task = PythonOperator(
         task_id='clean_data',
-        python_callable=clean_data
+        python_callable=clean_data,
+        dag=dag
     )
     
     transform_task = PythonOperator(
         task_id='transform_data',
-        python_callable=transform_data
+        python_callable=transform_data,
+        dag=dag
     )
     
     validate_task = PythonOperator(
         task_id='validate_data',
-        python_callable=validate_data
+        python_callable=validate_data,
+        dag=dag
     )
     
     clean_task >> transform_task >> validate_task
@@ -465,12 +552,14 @@ with TaskGroup('data_processing', dag=dag) as processing_group:
 with TaskGroup('analytics', dag=dag) as analytics_group:
     kpi_task = PythonOperator(
         task_id='calculate_kpis',
-        python_callable=calculate_kpis
+        python_callable=calculate_kpis,
+        dag=dag
     )
     
     metrics_task = PythonOperator(
         task_id='aggregate_metrics',
-        python_callable=aggregate_metrics
+        python_callable=aggregate_metrics,
+        dag=dag
     )
     
     [kpi_task, metrics_task]

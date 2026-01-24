@@ -6,7 +6,7 @@ import logging
 from typing import List, Dict, Any
 from pyspark.sql import SparkSession, DataFrame
 from pyspark.sql.types import StructType, StructField, StringType, IntegerType, LongType, FloatType, ArrayType, MapType
-from ingestion.api_client import TMDBClient
+from  src.ingestion.api_client import TMDBClient
 
 logger = logging.getLogger(__name__)
 

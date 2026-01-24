@@ -2,8 +2,10 @@ version: '3.8'
 
 x-airflow-common: &airflow-common
   build:
-    context: .
+    context: ..
     dockerfile: docker/Dockerfile.airflow
+  env_file:
+    - ../.env
   environment: &airflow-common-env
     AIRFLOW__CORE__EXECUTOR: LocalExecutor
     AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://airflow:airflow@postgres/airflow
@@ -17,12 +19,12 @@ x-airflow-common: &airflow-common
     REDIS_PORT: 6379
     LOG_LEVEL: INFO
   volumes:
-    - ./airflow/dags:/opt/airflow/dags
-    - ./airflow/logs:/opt/airflow/logs
-    - ./airflow/plugins:/opt/airflow/plugins
-    - ./src:/opt/spark-apps/src
-    - ./data:/opt/spark-data
-    - ./logs:/opt/logs
+    - ../airflow/dags:/opt/airflow/dags
+    - ../airflow/logs:/opt/airflow/logs
+    - ../airflow/plugins:/opt/airflow/plugins
+    - ../src:/opt/spark-apps/src
+    - ../data:/opt/spark-data
+    - ../logs:/opt/logs
   user: "${AIRFLOW_UID:-50000}:0"
   depends_on:
     postgres:
@@ -74,7 +76,7 @@ services:
   # ==========================================================================
   spark-master:
     build:
-      context: .
+      context: ..
       dockerfile: docker/Dockerfile.spark
     container_name: tmdb-spark-master
     hostname: spark-master
@@ -95,9 +97,9 @@ services:
       - "8080:8080"  # Spark Master Web UI
       - "7077:7077"  # Spark Master
     volumes:
-      - ./src:/opt/spark-apps/src
-      - ./data:/opt/spark-data
-      - ./logs:/opt/logs
+      - ../src:/opt/spark-apps/src
+      - ../data:/opt/spark-data
+      - ../logs:/opt/logs
     restart: always
 
   # ==========================================================================
@@ -105,7 +107,7 @@ services:
   # ==========================================================================
   spark-worker-1:
     build:
-      context: .
+      context: ..
       dockerfile: docker/Dockerfile.spark
     container_name: tmdb-spark-worker-1
     hostname: spark-worker-1
@@ -124,9 +126,9 @@ services:
     ports:
       - "8081:8081"
     volumes:
-      - ./src:/opt/spark-apps/src
-      - ./data:/opt/spark-data
-      - ./logs:/opt/logs
+      - ../src:/opt/spark-apps/src
+      - ../data:/opt/spark-data
+      - ../logs:/opt/logs
     depends_on:
       - spark-master
     restart: always
@@ -136,7 +138,7 @@ services:
   # ==========================================================================
   spark-worker-2:
     build:
-      context: .
+      context: ..
       dockerfile: docker/Dockerfile.spark
     container_name: tmdb-spark-worker-2
     hostname: spark-worker-2
@@ -155,9 +157,9 @@ services:
     ports:
       - "8082:8081"
     volumes:
-      - ./src:/opt/spark-apps/src
-      - ./data:/opt/spark-data
-      - ./logs:/opt/logs
+      - ../src:/opt/spark-apps/src
+      - ../data:/opt/spark-data
+      - ../logs:/opt/logs
     depends_on:
       - spark-master
     restart: always
@@ -221,7 +223,7 @@ services:
   # ==========================================================================
   jupyter:
     build:
-      context: .
+      context: ..
       dockerfile: docker/Dockerfile.jupyter
     container_name: tmdb-jupyter
     environment:
@@ -234,9 +236,9 @@ services:
     ports:
       - "8888:8888"
     volumes:
-      - ./notebooks:/home/jovyan/notebooks
-      - ./src:/home/jovyan/src
-      - ./data:/home/jovyan/data
+      - ../notebooks:/home/jovyan/notebooks
+      - ../src:/home/jovyan/src
+      - ../data:/home/jovyan/data
     restart: always
 
   # ==========================================================================
@@ -253,8 +255,8 @@ services:
       - "3000:3000"
     volumes:
       - grafana-storage:/var/lib/grafana
-      - ./grafana/dashboards:/etc/grafana/provisioning/dashboards
-      - ./grafana/datasources:/etc/grafana/provisioning/datasources
+      - ../grafana/dashboards:/etc/grafana/provisioning/dashboards
+      - ../grafana/datasources:/etc/grafana/provisioning/datasources
     depends_on:
       - postgres
     restart: always
