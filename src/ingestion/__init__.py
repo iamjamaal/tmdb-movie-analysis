@@ -1,8 +1,8 @@
 """
-Data ingestion module for TMDB API
+Data Ingestion Module for TMDB Movie Analysis
 """
 
 from .data_fetcher import DataFetcher
-from .api_client import TMDBClient
+from .api_client import APIClient
 
-__all__ = ['DataFetcher', 'TMDBClient']
+__all__ = ['DataFetcher', 'APIClient']
