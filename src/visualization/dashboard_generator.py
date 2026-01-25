@@ -7,6 +7,7 @@ from typing import Dict, Any, List, Optional, Tuple
 from pathlib import Path
 import json
 from datetime import datetime
+import traceback
 
 import matplotlib.pyplot as plt
 import matplotlib.patches as mpatches
@@ -19,11 +20,24 @@ logger = logging.getLogger(__name__)
 
 # Optional Plotly integration
 try:
-    from .plotly.dashboard import PlotlyDashboardGenerator
+    from .plotly_dashboard import PlotlyDashboardGenerator
     _HAS_PLOTLY = True
 except Exception:
-    PlotlyDashboardGenerator = None  # type: ignore
-    _HAS_PLOTLY = False
+    # Try absolute import fallback (when module executed differently)
+    try:
+        from src.visualization.plotly_dashboard import PlotlyDashboardGenerator
+        _HAS_PLOTLY = True
+    except Exception:
+        PlotlyDashboardGenerator = None  # type: ignore
+        _HAS_PLOTLY = False
+        logger.warning("Plotly import failed; interactive Plotly disabled")
+        # Print full traceback to stdout to aid debugging in container logs
+        try:
+            print("--- Plotly import traceback ---")
+            print(traceback.format_exc())
+            print("--- end traceback ---")
+        except Exception:
+            pass
 
 
 class DashboardGenerator:
