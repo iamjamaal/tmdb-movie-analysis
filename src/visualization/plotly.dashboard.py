@@ -21,7 +21,16 @@ class PlotlyDashboardGenerator:
     
     def __init__(self, config: Dict[str, Any]):
         self.config = config
-        self.output_dir = Path(config.get('paths', {}).get('output', './data/output'))
+        # Prefer explicit output base from config (output.base_path), fallback to legacy keys
+        output_base = None
+        try:
+            output_base = config.get('output', {}).get('base_path') if config else None
+        except Exception:
+            output_base = None
+        if output_base:
+            self.output_dir = Path(output_base)
+        else:
+            self.output_dir = Path(config.get('paths', {}).get('output', './data/output'))
         self.viz_dir = self.output_dir / 'visualizations' / 'interactive'
         self.viz_dir.mkdir(parents=True, exist_ok=True)
         

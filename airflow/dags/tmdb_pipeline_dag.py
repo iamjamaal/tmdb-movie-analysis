@@ -447,14 +447,42 @@ def generate_visualizations(**context):
     # Generate visualizations
     df = spark.read.parquet(transformed_data_path)
     generator = DashboardGenerator(config)
-    
+
     visualizations = generator.generate_all_visualizations(df)
-    
+
     # Push metadata
     context['task_instance'].xcom_push(key='visualizations', value=visualizations)
-    
+
+    # If Plotly interactive visualizations were generated, push them separately to XCom
+    if isinstance(visualizations, dict) and 'interactive_plotly' in visualizations:
+        try:
+            context['task_instance'].xcom_push(key='interactive_plotly', value=visualizations['interactive_plotly'])
+            logger.info(f"Pushed interactive_plotly with {len(visualizations['interactive_plotly'])} items to XCom")
+        except Exception as e:
+            logger.warning(f"Failed to push interactive_plotly to XCom: {e}")
+        # Also log the list of generated Plotly files for easier debugging
+        try:
+            import json as _json
+
+            inter = visualizations.get('interactive_plotly')
+            files = []
+
+            def _collect_vals(obj):
+                if isinstance(obj, dict):
+                    for v in obj.values():
+                        yield from _collect_vals(v)
+                else:
+                    yield obj
+
+            for v in _collect_vals(inter):
+                files.append(str(v))
+
+            logger.info("Interactive Plotly files:\n%s", _json.dumps(files, indent=2))
+        except Exception as e:
+            logger.warning(f"Could not enumerate interactive_plotly files for logging: {e}")
+
     logger.info(f"Generated {len(visualizations)} visualizations")
-    
+
     return visualizations
 
 

@@ -17,13 +17,30 @@ from pyspark.sql import functions as F
 
 logger = logging.getLogger(__name__)
 
+# Optional Plotly integration
+try:
+    from .plotly.dashboard import PlotlyDashboardGenerator
+    _HAS_PLOTLY = True
+except Exception:
+    PlotlyDashboardGenerator = None  # type: ignore
+    _HAS_PLOTLY = False
+
 
 class DashboardGenerator:
     """Generate comprehensive visualizations and interactive dashboards"""
     
     def __init__(self, config: Dict[str, Any]):
         self.config = config
-        self.output_dir = Path(config.get('paths', {}).get('output', './data/output'))
+        # Prefer explicit output base from config (output.base_path), fallback to legacy keys
+        output_base = None
+        try:
+            output_base = config.get('output', {}).get('base_path') if config else None
+        except Exception:
+            output_base = None
+        if output_base:
+            self.output_dir = Path(output_base)
+        else:
+            self.output_dir = Path(config.get('paths', {}).get('output', './data/output'))
         self.viz_dir = self.output_dir / 'visualizations'
         self.viz_dir.mkdir(parents=True, exist_ok=True)
         
@@ -1069,7 +1086,18 @@ class DashboardGenerator:
             dashboards['quality_metrics'] = self.create_quality_metrics_dashboard(df)
             dashboards['genre_analysis'] = self.create_genre_analysis_dashboard(df)
             dashboards['interactive_html'] = self.create_interactive_html_dashboard(df, kpis)
-            
+
+            # Generate Plotly interactive dashboards if available
+            if _HAS_PLOTLY and PlotlyDashboardGenerator is not None:
+                try:
+                    pgen = PlotlyDashboardGenerator(self.config)
+                    visual_interactive = pgen.generate_all_interactive_visualizations(df, kpis)
+                    dashboards['interactive_plotly'] = visual_interactive
+                except Exception as e:
+                    logger.warning(f"Plotly visualizations failed: {e}")
+            else:
+                logger.info("Plotly not available — skipping interactive Plotly dashboards")
+
             logger.info(f"Generated {len(dashboards)} dashboards successfully")
             
         except Exception as e:
@@ -1077,3 +1105,100 @@ class DashboardGenerator:
             raise
         
         return dashboards
+
+    def generate_all_visualizations(
+        self,
+        df: DataFrame,
+        kpis: Optional[Dict[str, Any]] = None
+    ) -> Dict[str, str]:
+        """Backward-compatible alias for older callers.
+
+        Older code (DAGs/tasks) may call `generate_all_visualizations` —
+        delegate to the current `generate_all_dashboards` implementation.
+        """
+        logger.info("generate_all_visualizations() called — delegating to generate_all_dashboards")
+        return self.generate_all_dashboards(df, kpis or {})
+
+
+if __name__ == '__main__':
+    import argparse
+    import json
+    import logging
+    from pathlib import Path
+    from src.config import load_config
+    from src.utils.spark_session import create_optimized_session
+
+    logging.basicConfig(level=logging.INFO)
+    log = logging.getLogger('dashboard_generator_cli')
+
+    parser = argparse.ArgumentParser(description='Run DashboardGenerator from CLI')
+    parser.add_argument('--config', '-c', help='Path to config.yaml', default=None)
+    parser.add_argument('--input', '-i', help='Parquet input path (overrides auto-discovery)', default=None)
+    parser.add_argument('--env', help='Environment for Spark (development/testing/production)', default='development')
+    args = parser.parse_args()
+
+    # Load config
+    try:
+        cfg = load_config(args.config) if args.config else load_config()
+    except Exception as e:
+        log.error(f'Failed to load config: {e}')
+        raise
+
+    # Determine input parquet path
+    input_path = args.input
+    if not input_path:
+        # Resolve project root (two levels up from `src/visualization`)
+        project_root = Path(__file__).resolve().parents[2]
+
+        # Try to read output base from config to infer container mounts
+        cfg_output_base = None
+        try:
+            cfg_output_base = Path(cfg.get('output', {}).get('base_path', '')) if cfg else None
+        except Exception:
+            cfg_output_base = None
+
+        # Candidate locations to look for processed runs (works locally and in-container)
+        candidate_dirs = [
+            project_root / 'data' / 'processed',   # local dev layout
+            Path.cwd() / 'data' / 'processed',     # invoked from repo root
+        ]
+
+        if cfg_output_base and cfg_output_base.exists():
+            candidate_dirs.append(cfg_output_base.parent / 'processed')
+
+        # Common container mount used by docker-compose
+        candidate_dirs.append(Path('/opt/spark-data') / 'processed')
+
+        # Find the first candidate that exists and has transformed runs
+        latest = None
+        tried = []
+        for cand in candidate_dirs:
+            tried.append(str(cand))
+            if cand.exists():
+                runs = sorted([p for p in cand.iterdir() if p.is_dir() and p.name.startswith('movies_transformed_run_')])
+                if runs:
+                    latest = runs[-1]
+                    input_path = str(latest)
+                    log.info(f'Auto-selected latest transformed folder: {input_path}')
+                    break
+
+        if not latest:
+            log.error('Processed data directory not found. Tried: %s', tried)
+            raise SystemExit(1)
+
+    # Start Spark
+    spark = create_optimized_session('dashboard-generator', environment=args.env)
+
+    # Read parquet
+    log.info(f'Reading parquet from {input_path}')
+    df = spark.read.parquet(input_path)
+
+    # Generate dashboards
+    gen = DashboardGenerator(cfg)
+    kpis = cfg.get('kpis', {})
+
+    log.info('Generating dashboards...')
+    dashboards = gen.generate_all_dashboards(df, kpis)
+
+    # Print output paths as JSON
+    print(json.dumps(dashboards, indent=2))
