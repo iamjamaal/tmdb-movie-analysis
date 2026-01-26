@@ -12,37 +12,36 @@ This project transforms raw movie data from TMDB API into actionable insights th
 - **Advanced Analytics** with comprehensive KPIs
 - **Interactive Visualizations** with Matplotlib/Seaborn
 
-## 🌟 Key Features
+## Key Features
 
 ### Data Engineering
-✅ **Scalable Architecture**: Spark cluster for distributed processing  
-✅ **Automated Workflows**: Airflow DAGs for orchestration  
-✅ **Smart Caching**: Redis-based caching to minimize API calls  
-✅ **Rate Limiting**: Token bucket algorithm for API protection  
-✅ **Error Handling**: Comprehensive retry logic and fallback mechanisms  
+ **Scalable Architecture**: Spark cluster for distributed processing  
+ **Automated Workflows**: Airflow DAGs for orchestration  
+ **Smart Caching**: Redis-based caching to minimize API calls  
+ **Rate Limiting**: Token bucket algorithm for API protection  
+ **Error Handling**: Comprehensive retry logic and fallback mechanisms  
 
 ### Data Quality
-✅ **Schema Validation**: Automated schema checking  
-✅ **Business Rule Validation**: Custom validation rules  
-✅ **Data Completeness Checks**: Missing value detection  
-✅ **Outlier Detection**: Statistical anomaly identification  
-✅ **Quality Scoring**: Overall data health metrics  
+ **Schema Validation**: Automated schema checking  
+ **Business Rule Validation**: Custom validation rules  
+ **Data Completeness Checks**: Missing value detection  
+ **Outlier Detection**: Statistical anomaly identification  
+ **Quality Scoring**: Overall data health metrics  
 
 ### Analytics & KPIs
-✅ **Financial Metrics**: Revenue, profit, ROI calculations  
-✅ **Performance Rankings**: Top/bottom movies by various metrics  
-✅ **Temporal Analysis**: Yearly trends and patterns  
-✅ **Genre Analysis**: Genre-specific performance metrics  
-✅ **Franchise Comparison**: Franchise vs standalone analysis  
-✅ **Director Analytics**: Director performance metrics  
+ **Financial Metrics**: Revenue, profit, ROI calculations  
+ **Performance Rankings**: Top/bottom movies by various metrics  
+ **Temporal Analysis**: Yearly trends and patterns  
+ **Genre Analysis**: Genre-specific performance metrics  
+ **Franchise Comparison**: Franchise vs standalone analysis  
+ **Director Analytics**: Director performance metrics  
 
 ### Visualization
-✅ **Interactive Dashboards**: Web-based reporting  
-✅ **Trend Visualizations**: Time-series analysis  
-✅ **Correlation Plots**: Multi-dimensional analysis  
-✅ **Distribution Charts**: Statistical distributions  
+ **Interactive Dashboards**: Web-based reporting    
+ **Correlation Plots**: Multi-dimensional analysis  
+ **Distribution Charts**: Statistical distributions  
 
-## 🏗️ Architecture
+## Architecture
 
 ```
 ┌─────────────────────────────────────────────────┐
@@ -66,7 +65,7 @@ This project transforms raw movie data from TMDB API into actionable insights th
 └─────────────────────────────────────────────────┘
 ```
 
-## 📁 Project Structure
+##  Project Structure
 
 ```
 tmdb-movie-analysis/
@@ -132,35 +131,6 @@ tmdb-movie-analysis/
 └── README.md                   # This file
 ```
 
-## 🚀 Quick Start
-
-### Prerequisites
-- Docker Desktop (24.0+)
-- Docker Compose v2
-- 8GB+ RAM recommended
-- TMDB API Key ([Get it here](https://www.themoviedb.org/settings/api))
-
-### Installation
-
-1. **Clone the repository**
-```bash
-git clone <repository-url>
-cd tmdb-movie-analysis
-```
-
-2. **Set up environment variables**
-```bash
-cp .env.example .env
-# Edit .env with your TMDB API key and configurations
-nano .env
-```
-
-3. **Start all services**
-```bash
-make setup
-make up
-```
-
 4. **Access the applications**
 - **Airflow**: http://localhost:8081 (admin/admin)
 - **Spark Master UI**: http://localhost:8080
@@ -176,44 +146,9 @@ make up
 make run-pipeline
 ```
 
-## 📋 Configuration
-
-### Environment Variables (.env)
-```bash
-# API Configuration
-TMDB_API_KEY=your_tmdb_api_key
-
-# Database
-POSTGRES_USER=airflow
-POSTGRES_PASSWORD=airflow
-POSTGRES_DB=airflow
-
-# Redis
-REDIS_PASSWORD=redis_secret
-
-# Airflow
-AIRFLOW_UID=50000
-AIRFLOW__CORE__FERNET_KEY=your_fernet_key
 ```
 
-### Pipeline Configuration (config.yaml)
-```yaml
-api:
-  base_url: "https://api.themoviedb.org/3"
-  rate_limit:
-    requests_per_second: 40
-
-spark:
-  driver_memory: "4g"
-  executor_memory: "4g"
-  shuffle_partitions: "200"
-
-pipeline:
-  batch_size: 100
-  checkpoint_interval: 10
-```
-
-## 🎯 Pipeline Stages
+##  Pipeline Stages
 
 ### 1. Data Ingestion
 - Fetches movie data from TMDB API
@@ -254,7 +189,7 @@ pipeline:
 - Rating correlations
 - Franchise comparisons
 
-## 📊 Sample KPIs
+##  Sample KPIs
 
 ### Financial Metrics
 - **Highest Revenue Movies**
@@ -273,136 +208,11 @@ pipeline:
 - Director performance metrics
 - Yearly box office trends
 
-## 🛠️ Development
 
-### Running Tests
-```bash
-# Unit tests
-make test
-
-# Integration tests
-make test-integration
-
-# Coverage report
-make test-coverage
-```
-
-### Code Quality
-```bash
-# Format code
-make format
-
-# Lint code
-make lint
-
-# Type checking
-make type-check
-```
-
-### Debugging
-```bash
-# View logs
-make logs
-
-# Enter Spark container
-make spark-shell
-
-# Check service health
-make health-check
-```
-
-## 📈 Monitoring
-
-### Metrics Available
-- Pipeline execution time
-- Data quality scores
-- API call statistics
-- Cache hit rates
-- Spark job metrics
 
 ### Dashboards
 - **Grafana**: Real-time metrics (http://localhost:3000)
 - **Spark UI**: Job execution details (http://localhost:8080)
 - **Airflow UI**: Workflow status (http://localhost:8081)
 
-## 🧪 Testing Strategy
 
-### Unit Tests
-- Individual component testing
-- Mock external dependencies
-- Fast execution
-
-### Integration Tests
-- End-to-end pipeline testing
-- Real Spark sessions
-- Database interactions
-
-### Data Quality Tests
-- Schema validation tests
-- Business rule tests
-- Edge case handling
-
-## 🔧 Troubleshooting
-
-### Common Issues
-
-**Spark Out of Memory**
-```yaml
-# Increase memory in docker-compose.yml
-spark-master:
-  environment:
-    - SPARK_DRIVER_MEMORY=8g
-```
-
-**API Rate Limiting**
-```yaml
-# Reduce rate in config.yaml
-api:
-  rate_limit:
-    requests_per_second: 20
-```
-
-**Database Connection Issues**
-```bash
-# Reset database
-docker-compose down -v
-docker-compose up -d
-```
-
-## 📚 Documentation
-
-- [Complete Implementation Guide](COMPLETE_IMPLEMENTATION_GUIDE.md)
-- [Architecture Documentation](docs/architecture.md)
-- [API Documentation](docs/api_documentation.md)
-
-## 🤝 Contributing
-
-1. Fork the repository
-2. Create a feature branch
-3. Make your changes
-4. Add tests
-5. Submit a pull request
-
-## 📄 License
-
-This project is licensed under the MIT License - see the LICENSE file for details.
-
-## 👥 Authors
-
-- Your Name - *Initial work*
-
-## 🙏 Acknowledgments
-
-- TMDB for providing the API
-- Apache Spark community
-- Apache Airflow community
-
-## 📞 Support
-
-- Documentation: See `docs/` directory
-- Issues: GitHub Issues
-- Email: your-email@example.com
-
----
-
-**Happy Data Engineering! 🚀**
