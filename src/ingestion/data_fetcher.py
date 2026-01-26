@@ -40,9 +40,17 @@ class DataFetcher:
         return StructType([
             StructField("adult", StringType(), True),
             StructField("backdrop_path", StringType(), True),
-            StructField("belongs_to_collection", MapType(StringType(), StringType()), True),
+            StructField("belongs_to_collection", StructType([
+                StructField("id", IntegerType(), True),
+                StructField("name", StringType(), True),
+                StructField("poster_path", StringType(), True),
+                StructField("backdrop_path", StringType(), True)
+            ]), True),
             StructField("budget", LongType(), True),
-            StructField("genres", ArrayType(MapType(StringType(), StringType())), True),
+            StructField("genres", ArrayType(StructType([
+                StructField("id", IntegerType(), True),
+                StructField("name", StringType(), True)
+            ])), True),
             StructField("homepage", StringType(), True),
             StructField("id", IntegerType(), False),
             StructField("imdb_id", StringType(), True),
@@ -51,12 +59,24 @@ class DataFetcher:
             StructField("overview", StringType(), True),
             StructField("popularity", FloatType(), True),
             StructField("poster_path", StringType(), True),
-            StructField("production_companies", ArrayType(MapType(StringType(), StringType())), True),
-            StructField("production_countries", ArrayType(MapType(StringType(), StringType())), True),
+            StructField("production_companies", ArrayType(StructType([
+                StructField("name", StringType(), True),
+                StructField("id", IntegerType(), True),
+                StructField("logo_path", StringType(), True),
+                StructField("origin_country", StringType(), True)
+            ])), True),
+            StructField("production_countries", ArrayType(StructType([
+                StructField("iso_3166_1", StringType(), True),
+                StructField("name", StringType(), True)
+            ])), True),
             StructField("release_date", StringType(), True),
             StructField("revenue", LongType(), True),
             StructField("runtime", IntegerType(), True),
-            StructField("spoken_languages", ArrayType(MapType(StringType(), StringType())), True),
+            StructField("spoken_languages", ArrayType(StructType([
+                StructField("iso_639_1", StringType(), True),
+                StructField("name", StringType(), True),
+                StructField("english_name", StringType(), True)
+            ])), True),
             StructField("status", StringType(), True),
             StructField("tagline", StringType(), True),
             StructField("title", StringType(), True),
@@ -96,8 +116,8 @@ class DataFetcher:
         
         logger.info(f"Successfully fetched {len(movies_data)} movies")
         
-        # Create DataFrame with schema inference (faster than strict schema)
-        df = self.spark.createDataFrame(movies_data)
+        # Create DataFrame with explicit schema to ensure JSON structs are handled correctly
+        df = self.spark.createDataFrame(movies_data, schema=self.get_movie_schema())
         
         # Cache for reuse
         df.cache()

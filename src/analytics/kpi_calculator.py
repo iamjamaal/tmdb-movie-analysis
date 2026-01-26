@@ -175,24 +175,65 @@ class KPICalculator:
         Returns:
             Dictionary of search result DataFrames
         """
+        logger.info("Running advanced search queries")
         results = {}
         
-        # Search 1: Best-rated Science Fiction Action movies starring Bruce Willis
-        # Note: This requires complex array searching in PySpark
-        # For simplicity in this example, we'll implement the logic assuming flattened structures or UDFs could be used
-        # But given Spark's capabilities, we can use array_contains
+        # Search 1: Best-rated Science Fiction Action movies starring Bruce Willis (sorted by Rating - highest to lowest)
+        # Criteria:
+        # - Genres contains "Science Fiction" AND "Action"
+        # - Cast contains "Bruce Willis"
+        # - Sort by vote_average DESC
         
-        # We need to check genres array for both "Science Fiction" and "Action"
-        # And cast array for "Bruce Willis"
-        # However, our current schema has genres as pipe-separated string and cast as array of strings
+        logger.info("Executing Search 1: Bruce Willis + Sci-Fi + Action")
         
-        # Assuming genres and cast are processed
+        # Note: 'genres' is a pipe-separated string (e.g., "Action|Science Fiction")
+        # 'cast' is an Array of Strings
         
-        # This is a placeholder for the specific complex query logic
-        # In a real implementation, we would ensure the schema supports this querying
-        pass
+        results["bruce_willis_scifi_action"] = df.filter(
+            (F.col("genres").contains("Science Fiction")) & 
+            (F.col("genres").contains("Action")) & 
+            (F.array_contains(F.col("cast"), "Bruce Willis"))
+        ).orderBy(F.col("vote_average").desc())
+        
+        # Search 2: Find movies starring Uma Thurman, directed by Quentin Tarantino (sorted by runtime - shortest to longest)
+        # Criteria:
+        # - Cast contains "Uma Thurman"
+        # - Director is "Quentin Tarantino"
+        # - Sort by runtime ASC
+        
+        logger.info("Executing Search 2: Uma Thurman + Tarantino")
+        
+        results["uma_thurman_tarantino"] = df.filter(
+            (F.array_contains(F.col("cast"), "Uma Thurman")) & 
+            (F.col("director") == "Quentin Tarantino")
+        ).orderBy(F.col("runtime").asc())
         
         return results
+
+    def get_roi_by_genre(self, df: DataFrame) -> DataFrame:
+        """
+        Calculate ROI distribution by genre.
+        Explodes the genres column to have one row per genre per movie.
+        
+        Args:
+            df: Input DataFrame
+            
+        Returns:
+            DataFrame with 'genre' and 'roi' columns
+        """
+        logger.info("Calculating ROI by Genre")
+        
+        # Genres are pipe-separated strings, so we split them first
+        df_exploded = df.withColumn("genre", F.explode(F.split(F.col("genres"), "\|")))
+        
+        # Filter out null ROIs and empty genres
+        df_roi_genre = df_exploded.filter(
+            (F.col("roi").isNotNull()) & 
+            (F.col("genre").isNotNull()) & 
+            (F.col("genre") != "")
+        ).select("genre", "roi")
+        
+        return df_roi_genre
 
     def get_all_rankings(self, df: DataFrame) -> Dict[str, DataFrame]:
         """
