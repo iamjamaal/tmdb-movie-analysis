@@ -11,13 +11,13 @@ This comprehensive analysis examined movie performance metrics from The Movie Da
 ### 1.1 Data Acquisition
 
 - **Source**: TMDB API (<https://developer.themoviedb.org/docs>)
-- **Dataset Size**: 19 movies identified by specific IDs
+- **Dataset Size**: 18 movies identified by specific IDs
 - **Data Extraction Method**: RESTful API calls using Python's `requests` library
 - **Data Structure**: JSON responses converted to Pandas DataFrame
 
 ### 1.2 Data Cleaning & Preprocessing
 
-Our data cleaning pipeline addressed several data quality issues:
+ The data cleaning pipeline addressed several data quality issues:
 
 **Structural Transformations:**
 
@@ -453,16 +453,3 @@ As the industry continues to evolve with streaming platforms, changing audience 
 - **vote_average**: User rating (0-10 scale)
 - **vote_count**: Number of user votes
 - **popularity**: TMDB proprietary popularity metric
-
-### C. Acknowledgments
-
-- The Movie Database (TMDB) for API access
-- Course instructors and peers for guidance
-- Open source community for tools and libraries
-
----
-
-**Report Prepared By**: [Your Name]  
-**Date**: January 2026  
-**Course**: DEM05: Big Data, Data Processing, and Pipelines  
-**Institution**: AmaliTech Training Program
