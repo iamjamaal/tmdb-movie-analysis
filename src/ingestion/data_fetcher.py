@@ -75,13 +75,15 @@ class DataFetcher:
         Fetch movies from API and create Spark DataFrame
         
         Args:
-            movie_ids: List of movie IDs to fetch. If None, uses config
+            movie_ids: List of movie IDs to fetch. If None, uses default list from requirements
             
         Returns:
             Spark DataFrame with movie data
         """
         if movie_ids is None:
-            movie_ids = self.config.get('data', {}).get('movie_ids', [])
+            # Default movie IDs from requirements
+            movie_ids = [0, 299534, 19995, 140607, 299536, 597, 135397, 420818, 24428, 168259, 99861, 284054, 12445, 181808, 330457, 351286, 109445, 321612, 260513]
+            logger.info("Using default movie ID list from requirements")
         
         logger.info(f"Starting data fetch for {len(movie_ids)} movies")
         

@@ -68,7 +68,8 @@ class DataTransformer:
     def calculate_roi(self, df: DataFrame) -> DataFrame:
         """
         Calculate ROI (Return on Investment)
-        ROI = (Revenue / Budget) - 1
+        ROI = (Revenue / Budget)
+        Note: Requirements define ROI as Revenue / Budget
         
         Args:
             df: Input DataFrame
@@ -84,7 +85,7 @@ class DataTransformer:
                 (F.col("budget_musd").isNotNull()) & 
                 (F.col("budget_musd") > 0) & 
                 (F.col("revenue_musd").isNotNull()),
-                (F.col("revenue_musd") / F.col("budget_musd")) - 1
+                F.col("revenue_musd") / F.col("budget_musd")
             ).otherwise(F.lit(None))
         )
     
@@ -98,6 +99,41 @@ class DataTransformer:
         Returns:
             DataFrame with release_year column
         """
+        logger.info("Extracting release year")
+        
+        return df.withColumn("release_year", F.year(F.col("release_date")))
+
+    def adjust_vote_average(self, df: DataFrame) -> DataFrame:
+        """
+        Movies with vote_count = 0 -> Analyze their vote_average and adjust accordingly.
+        Currently setting to None if vote_count is 0
+        """
+        return df.withColumn(
+            "vote_average",
+            F.when(F.col("vote_count") == 0, F.lit(None)).otherwise(F.col("vote_average"))
+        )
+
+    def finalize_dataframe(self, df: DataFrame) -> DataFrame:
+        """
+        Reorder columns and finalize DataFrame
+        """
+        logger.info("Finalizing DataFrame structure")
+        
+        # Select and reorder columns as per requirements
+        target_columns = [
+            'id', 'title', 'tagline', 'release_date', 'genres', 'belongs_to_collection',
+            'original_language', 'budget_musd', 'revenue_musd', 'production_companies',
+            'production_countries', 'vote_count', 'vote_average', 'popularity',
+            'runtime', 'overview', 'spoken_languages', 'poster_path', 
+            'cast', 'cast_size', 'director', 'crew_size',
+            # Keep calculated columns for analysis
+            'profit_musd', 'roi', 'release_year'
+        ]
+        
+        # Select only existing columns
+        existing_columns = [c for c in target_columns if c in df.columns]
+        
+        return df.select(*existing_columns)
         logger.info("Extracting release year")
         
         return df.withColumn(

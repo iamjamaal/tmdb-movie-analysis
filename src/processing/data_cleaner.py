@@ -37,10 +37,66 @@ class DataCleaner:
         Returns:
             DataFrame with irrelevant columns removed
         """
-        columns_to_drop = self.processing_config.get('columns_to_drop', [])
+        # Default columns to drop based on requirements
+        columns_to_drop = ['adult', 'imdb_id', 'original_title', 'video', 'homepage']
+        # Add any additional columns from config
+        columns_to_drop.extend(self.processing_config.get('columns_to_drop', []))
+        
         logger.info(f"Dropping columns: {columns_to_drop}")
         
         return df.drop(*columns_to_drop)
+
+    def extract_production_countries(self, df: DataFrame) -> DataFrame:
+        """
+        Extract and concatenate production country names
+        """
+        logger.info("Extracting production countries")
+        return df.withColumn(
+            "production_countries",
+            F.when(
+                F.size(F.col("production_countries")) > 0,
+                F.concat_ws("|", F.transform(F.col("production_countries"), lambda x: x.getItem("name")))
+            ).otherwise(F.lit(None))
+        )
+
+    def extract_production_companies(self, df: DataFrame) -> DataFrame:
+        """
+        Extract and concatenate production company names
+        """
+        logger.info("Extracting production companies")
+        return df.withColumn(
+            "production_companies",
+            F.when(
+                F.size(F.col("production_companies")) > 0,
+                F.concat_ws("|", F.transform(F.col("production_companies"), lambda x: x.getItem("name")))
+            ).otherwise(F.lit(None))
+        )
+
+    def handle_missing_and_incorrect_data(self, df: DataFrame) -> DataFrame:
+        """
+        Handle missing values, incorrect data types, and realistic value checks
+        """
+        logger.info("Handling missing and incorrect data")
+        
+        # 5. Convert column datatypes (handled by schema, but ensuring numerics)
+        # 6. Replace unrealistic values
+        # Budget/Revenue/Runtime = 0 -> Replace with None (Spark's NaN equivalent for Nullable)
+        df = df.withColumn("budget", F.when(F.col("budget") == 0, F.lit(None)).otherwise(F.col("budget")))
+        df = df.withColumn("revenue", F.when(F.col("revenue") == 0, F.lit(None)).otherwise(F.col("revenue")))
+        df = df.withColumn("runtime", F.when(F.col("runtime") == 0, F.lit(None)).otherwise(F.col("runtime")))
+        
+        # 'overview' and 'tagline' -> Replace known placeholders
+        df = df.withColumn("overview", F.when(F.col("overview") == "No Data", F.lit(None)).otherwise(F.col("overview")))
+        df = df.withColumn("tagline", F.when(F.col("tagline") == "No Data", F.lit(None)).otherwise(F.col("tagline")))
+        
+        # 7. Remove duplicates and drop rows with unknown 'id' or 'title'
+        df = df.dropDuplicates(['id'])
+        df = df.filter(F.col("id").isNotNull() & F.col("title").isNotNull())
+        
+        # 9. Filter to include only 'Released' movies, then drop 'status'
+        df = df.filter(F.col("status") == "Released").drop("status")
+        
+        return df
     
     def extract_collection_name(self, df: DataFrame) -> DataFrame:
         """
