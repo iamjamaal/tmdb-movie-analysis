@@ -146,7 +146,6 @@ tmdb-movie-analysis/
 make run-pipeline
 ```
 
-```
 
 ##  Pipeline Stages
 
