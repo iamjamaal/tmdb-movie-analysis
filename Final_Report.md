@@ -411,7 +411,7 @@ Comparative visualizations highlighted:
 - Test marketing materials with target audiences
 - Monitor production closely for red flags
 - Maintain flexibility for reshoots and refinement
-- Build contingency into budgets (10-15%)
+- Build contingency into budgets 
 
 ### 7.3 Innovation Opportunities
 
@@ -428,7 +428,7 @@ Comparative visualizations highlighted:
 
 This analysis of TMDB movie data reveals the complex interplay between art and commerce in the film industry. While franchises and large budgets provide commercial safety, the data shows that quality, innovation, and strategic positioning remain crucial for both critical and financial success.
 
-The most successful approach appears to be a balanced portfolio: leveraging established properties for reliable returns while investing in original content to build the franchises of tomorrow. Directors and studios that can navigate this balance—maintaining creative integrity while understanding commercial realities—position themselves for sustained success.
+The most successful approach appears to be a balanced portfolio: leveraging established properties for reliable returns while investing in original content to build the franchises of tomorrow. Directors and studios that can navigate this balance maintaining creative integrity while understanding commercial realities position themselves for sustained success.
 
 As the industry continues to evolve with streaming platforms, changing audience preferences, and technological innovations, the fundamental insights from this analysis remain valuable: quality matters, audiences reward consistency, and strategic thinking amplifies creative vision.
 
