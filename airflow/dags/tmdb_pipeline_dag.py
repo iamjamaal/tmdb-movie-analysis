@@ -4,6 +4,7 @@ Airflow DAG for TMDB Movie Analysis Pipeline
 
 import os
 import sys
+import psycopg2
 from datetime import datetime, timedelta
 from pathlib import Path
 
@@ -43,9 +44,8 @@ dag = DAG(
 )
 
 
-# ============================================================================
+
 # Task Functions
-# ============================================================================
 
 def validate_environment(**context):
     """Validate environment and prerequisites"""
@@ -237,9 +237,8 @@ def validate_data(**context):
     
     
     
-    # ------------------------------------------------------------------
+
     # Spark + validation
-    # ------------------------------------------------------------------
     config = load_config("/opt/spark-apps/src/config/config.yaml")
     spark = SparkSessionManager.get_or_create_session(
         app_name="data-validation",
@@ -252,9 +251,8 @@ def validate_data(**context):
         validator = DataValidator(config)
         validation_report = validator.generate_validation_report(df)
 
-        # ------------------------------------------------------------------
+
         # Persist validation report
-        # ------------------------------------------------------------------
         report_path = f"/opt/spark-data/output/validation_report_{run_id}.json"
         with open(report_path, "w") as f:
             json.dump(validation_report, f, indent=2, default=str)
@@ -268,9 +266,8 @@ def validate_data(**context):
                 f"below threshold ({min_score}%)"
             )
 
-        # ------------------------------------------------------------------
-        # Push metadata only (NOT full report)
-        # ------------------------------------------------------------------
+
+        # Push metadata only
         ti.xcom_push(
             key="validation_report_path",
             value=report_path
@@ -289,9 +286,7 @@ def validate_data(**context):
         }
 
     finally:
-        # ------------------------------------------------------------------
         # Always stop Spark
-        # ------------------------------------------------------------------
         spark.stop()
         logger.info("Spark session stopped")
     
@@ -453,14 +448,14 @@ def generate_visualizations(**context):
     # Push metadata
     context['task_instance'].xcom_push(key='visualizations', value=visualizations)
 
-    # If Plotly interactive visualizations were generated, push them separately to XCom
+    # push Plotly interactive visualizations separately to XCom
     if isinstance(visualizations, dict) and 'interactive_plotly' in visualizations:
         try:
             context['task_instance'].xcom_push(key='interactive_plotly', value=visualizations['interactive_plotly'])
             logger.info(f"Pushed interactive_plotly with {len(visualizations['interactive_plotly'])} items to XCom")
         except Exception as e:
             logger.warning(f"Failed to push interactive_plotly to XCom: {e}")
-        # Also log the list of generated Plotly files for easier debugging
+        # log the list of generated Plotly files for easier debugging
         try:
             import json as _json
 
@@ -514,30 +509,9 @@ def publish_results(**context):
         key='clean_record_count'
     )
     
-    # Create summary
-    summary = {
-        'run_id': run_id,
-        'execution_date': context['execution_date'].isoformat(),
-        'raw_records': raw_count,
-        'clean_records': clean_count,
-        'data_quality_score': health_score,
-        'status': 'SUCCESS'
-    }
-    
-    logger.info(f"Pipeline execution summary: {summary}")
-    
-    # Save summary
-    summary_path = f"/opt/spark-data/output/pipeline_summary_{run_id}.json"
-    import json
-    with open(summary_path, 'w') as f:
-        json.dump(summary, f, indent=2)
-    
-    return summary
 
 
-# ============================================================================
 # Task Definitions
-# ============================================================================
 
 # Validation task
 validate_env_task = PythonOperator(
@@ -613,8 +587,7 @@ cleanup_task = BashOperator(
     dag=dag
 )
 
-# ============================================================================
+
 # Task Dependencies
-# ============================================================================
 
 validate_env_task >> ingestion_group >> processing_group >> analytics_group >> viz_task >> publish_task >> cleanup_task
