@@ -1,4 +1,4 @@
-# 🎬 TMDB Movie Data Analysis Pipeline
+ # 🎬 TMDB Movie Data Analysis Pipeline
 
 A scalable data engineering pipeline for analyzing movie data from The Movie Database (TMDB) API using Apache Spark, Airflow, and modern data engineering practices.
 
@@ -65,73 +65,9 @@ This project transforms raw movie data from TMDB API into actionable insights th
 └─────────────────────────────────────────────────┘
 ```
 
-##  Project Structure
 
-```
-tmdb-movie-analysis/
-├── docker/                      # Docker configurations
-│   ├── docker-compose.yml      # Multi-service orchestration
-│   ├── Dockerfile.spark        # Spark image
-│   ├── Dockerfile.airflow      # Airflow image
-│   └── Dockerfile.jupyter      # Jupyter image
-│
-├── airflow/                     # Airflow components
-│   ├── dags/
-│   │   └── tmdb_pipeline_dag.py
-│   ├── plugins/
-│   └── config/
-│
-├── src/                         # Source code
-│   ├── config/
-│   │   ├── config.yaml         # Central configuration
-│   │   └── logging_config.py   # Logging setup
-│   │
-│   ├── ingestion/              # Data fetching
-│   │   ├── api_client.py       # TMDB API client
-│   │   └── data_fetcher.py     # Data fetching logic
-│   │
-│   ├── processing/             # Data processing
-│   │   ├── data_cleaner.py     # Data cleaning
-│   │   ├── data_transformer.py # Feature engineering
-│   │   └── data_validator.py   # Quality validation
-│   │
-│   ├── analytics/              # Analytics & KPIs
-│   │   ├── kpi_calculator.py   # KPI calculations
-│   │   ├── advanced_queries.py # Complex queries
-│   │   └── metrics_aggregator.py
-│   │
-│   ├── visualization/          # Visualizations
-│   │   └── dashboard_generator.py
-│   │
-│   ├── utils/                  # Utilities
-│   │   ├── spark_session.py    # Spark management
-│   │   └── helpers.py          # Helper functions
-│   │
-│   └── main.py                 # Main pipeline
-│
-├── tests/                       # Test suite
-│   ├── unit/
-│   ├── integration/
-│   └── conftest.py
-│
-├── notebooks/                   # Jupyter notebooks
-│   └── exploratory_analysis.ipynb
-│
-├── data/                        # Data directories
-│   ├── raw/                    # Raw API data
-│   ├── processed/              # Cleaned data
-│   └── output/                 # Results & reports
-│
-├── docs/                        # Documentation
-│   ├── architecture.md
-│   └── api_documentation.md
-│
-├── requirements.txt             # Python dependencies
-├── Makefile                    # Automation commands
-└── README.md                   # This file
-```
 
-4. **Access the applications**
+. **Access the applications**
 - **Airflow**: http://localhost:8081 (admin/admin)
 - **Spark Master UI**: http://localhost:8080
 - **JupyterLab**: http://localhost:8888
