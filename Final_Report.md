@@ -328,7 +328,7 @@ Comparative visualizations highlighted:
 
 **Data Constraints:**
 
-- Sample size of 19 movies limits statistical power
+- Sample size of 18 movies limits statistical power
 - Selection bias in movie ID list
 - Missing context on marketing spend
 - Incomplete representation of global cinema
