@@ -13,7 +13,6 @@ This comprehensive analysis examined movie performance metrics from The Movie Da
 - **Source**: TMDB API (<https://developer.themoviedb.org/docs>)
 - **Dataset Size**: 18 movies identified by specific IDs
 - **Data Extraction Method**: RESTful API calls using Python's `requests` library
-- **Data Structure**: JSON responses converted to Pandas DataFrame
 
 ### 1.2 Data Cleaning & Preprocessing
 
@@ -329,7 +328,7 @@ Comparative visualizations highlighted:
 
 **Data Constraints:**
 
-- Sample size of 19 movies limits statistical power
+- Sample size of 18 movies limits statistical power
 - Selection bias in movie ID list
 - Missing context on marketing spend
 - Incomplete representation of global cinema
@@ -412,7 +411,7 @@ Comparative visualizations highlighted:
 - Test marketing materials with target audiences
 - Monitor production closely for red flags
 - Maintain flexibility for reshoots and refinement
-- Build contingency into budgets (10-15%)
+- Build contingency into budgets 
 
 ### 7.3 Innovation Opportunities
 
@@ -429,7 +428,7 @@ Comparative visualizations highlighted:
 
 This analysis of TMDB movie data reveals the complex interplay between art and commerce in the film industry. While franchises and large budgets provide commercial safety, the data shows that quality, innovation, and strategic positioning remain crucial for both critical and financial success.
 
-The most successful approach appears to be a balanced portfolio: leveraging established properties for reliable returns while investing in original content to build the franchises of tomorrow. Directors and studios that can navigate this balance—maintaining creative integrity while understanding commercial realities—position themselves for sustained success.
+The most successful approach appears to be a balanced portfolio: leveraging established properties for reliable returns while investing in original content to build the franchises of tomorrow. Directors and studios that can navigate this balance maintaining creative integrity while understanding commercial realities position themselves for sustained success.
 
 As the industry continues to evolve with streaming platforms, changing audience preferences, and technological innovations, the fundamental insights from this analysis remain valuable: quality matters, audiences reward consistency, and strategic thinking amplifies creative vision.
 
