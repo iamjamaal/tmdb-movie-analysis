@@ -13,7 +13,6 @@ This comprehensive analysis examined movie performance metrics from The Movie Da
 - **Source**: TMDB API (<https://developer.themoviedb.org/docs>)
 - **Dataset Size**: 18 movies identified by specific IDs
 - **Data Extraction Method**: RESTful API calls using Python's `requests` library
-- **Data Structure**: JSON responses converted to Pandas DataFrame
 
 ### 1.2 Data Cleaning & Preprocessing
 
