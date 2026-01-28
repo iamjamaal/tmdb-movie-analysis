@@ -1,6 +1,6 @@
 # 🎬 TMDB Movie Data Analysis Pipeline
 
-A production-grade, scalable data engineering pipeline for analyzing movie data from The Movie Database (TMDB) API using Apache Spark, Airflow, and modern data engineering practices.
+A scalable data engineering pipeline for analyzing movie data from The Movie Database (TMDB) API using Apache Spark, Airflow, and modern data engineering practices.
 
 ## 📊 Project Overview
 
