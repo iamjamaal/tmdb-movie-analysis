@@ -186,13 +186,13 @@ class KPICalculator:
         
         logger.info("Executing Search 1: Bruce Willis + Sci-Fi + Action")
         
-        # Note: 'genres' is a pipe-separated string (e.g., "Action|Science Fiction")
-        # 'cast' is an Array of Strings
+        # Note: 'genres' and 'cast' are pipe-separated strings
+        # (e.g., "Action|Science Fiction" and "Actor A|Actor B")
         
         results["bruce_willis_scifi_action"] = df.filter(
             (F.col("genres").contains("Science Fiction")) & 
             (F.col("genres").contains("Action")) & 
-            (F.array_contains(F.col("cast"), "Bruce Willis"))
+            (F.col("cast").contains("Bruce Willis"))
         ).orderBy(F.col("vote_average").desc())
         
         # Search 2: Find movies starring Uma Thurman, directed by Quentin Tarantino (sorted by runtime - shortest to longest)
@@ -204,7 +204,7 @@ class KPICalculator:
         logger.info("Executing Search 2: Uma Thurman + Tarantino")
         
         results["uma_thurman_tarantino"] = df.filter(
-            (F.array_contains(F.col("cast"), "Uma Thurman")) & 
+            (F.col("cast").contains("Uma Thurman")) & 
             (F.col("director") == "Quentin Tarantino")
         ).orderBy(F.col("runtime").asc())
         

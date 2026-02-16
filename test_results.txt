@@ -1,0 +1,35 @@
+﻿============================= test session starts =============================
+collected 141 items
+
+tests\unit\test_advanced_queries.py ...........                          [  7%]
+tests\unit\test_api_client.py ..................                         [ 20%]
+tests\unit\test_data_cleaner.py .FFFFFFFFFFFFFF                          [ 31%]
+tests\unit\test_data_fetcher.py ....F.                                   [ 35%]
+tests\unit\test_data_transformer.py ..............                       [ 45%]
+tests\unit\test_data_validator.py ...............                        [ 56%]
+tests\unit\test_helpers.py ..........................................    [ 85%]
+tests\unit\test_kpi_calculator.py .......F.                              [ 92%]
+tests\unit\test_metrics_aggregator.py ..........F                        [100%]
+
+=========================== short test summary info ===========================
+FAILED tests/unit/test_data_cleaner.py::TestDataCleaner::test_handle_missing_values
+FAILED tests/unit/test_data_cleaner.py::TestDataCleaner::test_convert_datatypes
+FAILED tests/unit/test_data_cleaner.py::TestDataCleaner::test_remove_duplicates
+FAILED tests/unit/test_data_cleaner.py::TestDataCleaner::test_filter_released_movies
+FAILED tests/unit/test_data_cleaner.py::TestDataCleaner::test_clean_data_pipeline
+FAILED tests/unit/test_data_cleaner.py::TestDataCleaner::test_budget_revenue_conversion_to_millions
+FAILED tests/unit/test_data_cleaner.py::TestDataCleaner::test_parse_json_columns
+FAILED tests/unit/test_data_cleaner.py::TestDataCleaner::test_invalid_value_handling[0-True]
+FAILED tests/unit/test_data_cleaner.py::TestDataCleaner::test_invalid_value_handling[-1-True]
+FAILED tests/unit/test_data_cleaner.py::TestDataCleaner::test_invalid_value_handling[None-True]
+FAILED tests/unit/test_data_cleaner.py::TestDataCleaner::test_invalid_value_handling[100-False]
+FAILED tests/unit/test_data_cleaner.py::TestDataCleanerEdgeCases::test_empty_dataframe
+FAILED tests/unit/test_data_cleaner.py::TestDataCleanerEdgeCases::test_all_null_columns
+FAILED tests/unit/test_data_cleaner.py::TestDataCleanerEdgeCases::test_special_characters_in_title
+FAILED tests/unit/test_data_fetcher.py::TestDataFetcher::test_save_raw_data
+FAILED tests/unit/test_kpi_calculator.py::TestKPICalculatorSearch::test_run_search_queries
+FAILED tests/unit/test_metrics_aggregator.py::TestMetricsAggregatorCorrelation::test_export_all_metrics
+================= 17 failed, 124 passed in 337.30s (0:05:37) ==================
+SUCCESS: The process with PID 20916 (child process of PID 15160) has been terminated.
+SUCCESS: The process with PID 15160 (child process of PID 13292) has been terminated.
+SUCCESS: The process with PID 13292 (child process of PID 1924) has been terminated.

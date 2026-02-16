@@ -22,7 +22,7 @@ sys.path.insert(0, str(PROJECT_ROOT))
 # Default arguments
 default_args = {
     'owner': 'noah_jamal_nabila',
-    'depends_on_past': False,
+    'depends_on_past': True,
     'email': ['noah_jamal_nabila@example.com'],
     'email_on_failure': True,
     'email_on_retry': False,

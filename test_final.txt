@@ -1,0 +1,18 @@
+﻿============================= test session starts =============================
+collected 150 items
+
+tests\integration\test_pipeline_integration.py .........xx               [  7%]
+tests\unit\test_advanced_queries.py ...........                          [ 14%]
+tests\unit\test_api_client.py ..................                         [ 26%]
+tests\unit\test_data_cleaner.py .............                            [ 35%]
+tests\unit\test_data_fetcher.py ......                                   [ 39%]
+tests\unit\test_data_transformer.py ..............                       [ 48%]
+tests\unit\test_data_validator.py ...............                        [ 58%]
+tests\unit\test_helpers.py ..........................................    [ 86%]
+tests\unit\test_kpi_calculator.py .........                              [ 92%]
+tests\unit\test_metrics_aggregator.py ...........                        [100%]
+
+================= 148 passed, 2 xfailed in 766.83s (0:12:46) ==================
+SUCCESS: The process with PID 9412 (child process of PID 32132) has been terminated.
+SUCCESS: The process with PID 32132 (child process of PID 11400) has been terminated.
+SUCCESS: The process with PID 11400 (child process of PID 26276) has been terminated.
