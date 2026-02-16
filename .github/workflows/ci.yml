@@ -5,11 +5,15 @@ on:
     branches: [main, develop]
   pull_request:
     branches: [main]
+  workflow_dispatch:   # allow manual trigger
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
 
 env:
-  PYTHON_VERSION: "3.10"
-  JAVA_VERSION: "11"
-  TMDB_API_KEY: ${{ secrets.TMDB_API_KEY }}
+  PYTHON_VERSION: "3.11"
+  JAVA_VERSION: "17"
 
 jobs:
   # =========================================================================
@@ -77,10 +81,11 @@ jobs:
           TMDB_API_KEY: test_api_key_for_ci
           ENVIRONMENT: testing
           LOG_LEVEL: ERROR
+          PYSPARK_PYTHON: python
+          PYSPARK_DRIVER_PYTHON: python
         run: |
           python -m pytest tests/unit/ \
             -v \
-            -m "unit or not integration" \
             --tb=short \
             --junitxml=reports/unit-test-results.xml \
             --cov=src \
@@ -96,16 +101,8 @@ jobs:
           name: unit-test-results
           path: reports/
 
-      - name: Upload coverage report
-        uses: actions/upload-artifact@v4
-        if: always()
-        with:
-          name: coverage-report
-          path: reports/coverage-html/
-
-  # =========================================================================
+  
   # Integration Tests
-  # =========================================================================
   integration-tests:
     name: Integration Tests
     runs-on: ubuntu-latest
@@ -136,10 +133,11 @@ jobs:
           TMDB_API_KEY: test_api_key_for_ci
           ENVIRONMENT: testing
           LOG_LEVEL: ERROR
+          PYSPARK_PYTHON: python
+          PYSPARK_DRIVER_PYTHON: python
         run: |
           python -m pytest tests/integration/ \
             -v \
-            -m "integration or not unit" \
             --tb=short \
             --junitxml=reports/integration-test-results.xml
 
@@ -148,11 +146,10 @@ jobs:
         if: always()
         with:
           name: integration-test-results
-          path: reports/
+          path: reports
 
-  # =========================================================================
-  # Build Docker Images (on main only)
-  # =========================================================================
+          
+  # Build & Push Docker Images (main branch only)
   build:
     name: Build Docker Images
     runs-on: ubuntu-latest
@@ -169,6 +166,7 @@ jobs:
           docker build \
             -f docker/Dockerfile.spark \
             -t tmdb-spark:${{ github.sha }} \
+            -t tmdb-spark:latest \
             .
 
       - name: Build Airflow image
@@ -176,6 +174,7 @@ jobs:
           docker build \
             -f docker/Dockerfile.airflow \
             -t tmdb-airflow:${{ github.sha }} \
+            -t tmdb-airflow:latest \
             .
 
       - name: Build Jupyter image
@@ -183,8 +182,8 @@ jobs:
           docker build \
             -f docker/Dockerfile.jupyter \
             -t tmdb-jupyter:${{ github.sha }} \
+            -t tmdb-jupyter:latest \
             .
 
       - name: Verify images
-        run: |
-          docker images | grep tmdb
+        run: docker images | grep tmdb
