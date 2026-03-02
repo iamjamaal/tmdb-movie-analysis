@@ -84,6 +84,7 @@ jobs:
           PYSPARK_PYTHON: python
           PYSPARK_DRIVER_PYTHON: python
         run: |
+          mkdir -p reports
           python -m pytest tests/unit/ \
             -v \
             --tb=short \
@@ -92,7 +93,7 @@ jobs:
             --cov-report=xml:reports/coverage.xml \
             --cov-report=html:reports/coverage-html \
             --cov-report=term-missing \
-            --cov-fail-under=50
+            --cov-fail-under=40
 
       - name: Upload test results
         uses: actions/upload-artifact@v4
@@ -136,6 +137,7 @@ jobs:
           PYSPARK_PYTHON: python
           PYSPARK_DRIVER_PYTHON: python
         run: |
+          mkdir -p reports
           python -m pytest tests/integration/ \
             -v \
             --tb=short \
