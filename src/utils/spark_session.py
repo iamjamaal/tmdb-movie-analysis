@@ -12,9 +12,9 @@ logger = logging.getLogger(__name__)
 
 class SparkSessionManager:
     """Manages Spark session creation and configuration"""
-    
+
     _instance: Optional[SparkSession] = None
-    
+
     @classmethod
     def get_or_create_session(
         cls,
@@ -22,15 +22,15 @@ class SparkSessionManager:
         config: Optional[Dict[str, Any]] = None
     ) -> SparkSession:
         """Get existing or create new Spark session"""
-        
+
         if cls._instance is None:
             logger.info(f"Creating new Spark session: {app_name}")
             cls._instance = cls._create_session(app_name, config or {})
         else:
             logger.info("Reusing existing Spark session")
-            
+
         return cls._instance
-    
+
     @classmethod
     def _create_session(
         cls,
@@ -38,10 +38,10 @@ class SparkSessionManager:
         config: Dict[str, Any]
     ) -> SparkSession:
         """Create and configure Spark session"""
-        
+
         # Build Spark configuration
         spark_conf = SparkConf()
-        
+
         # Default configurations
         default_config = {
             'spark.app.name': app_name,
@@ -59,34 +59,34 @@ class SparkSessionManager:
             'spark.sql.parquet.compression.codec': 'snappy',
             'spark.sql.warehouse.dir': config.get('warehouse_dir', '/opt/spark-data/warehouse')
         }
-        
+
         # Override with custom config
         custom_spark_config = config.get('spark', {})
         default_config.update(custom_spark_config)
-        
+
         # Set all configurations
         for key, value in default_config.items():
             spark_conf.set(key, value)
-        
+
         # Create Spark session
         builder = SparkSession.builder.config(conf=spark_conf)
-        
+
         # Enable Hive support if needed
         if config.get('enable_hive', False):
             builder = builder.enableHiveSupport()
-        
+
         session = builder.getOrCreate()
-        
+
         # Set log level
         log_level = config.get('log_level', 'WARN')
         session.sparkContext.setLogLevel(log_level)
-        
+
         logger.info(f"Spark session created successfully")
         logger.info(f"Spark version: {session.version}")
         logger.info(f"Master: {session.sparkContext.master}")
-        
+
         return session
-    
+
     @classmethod
     def stop_session(cls) -> None:
         """Stop the Spark session"""
@@ -96,23 +96,23 @@ class SparkSessionManager:
             cls._instance = None
         else:
             logger.info("No active Spark session to stop")
-    
+
     @classmethod
     def configure_checkpoint_dir(cls, checkpoint_dir: str) -> None:
         """Configure checkpoint directory for fault tolerance"""
         if cls._instance:
             cls._instance.sparkContext.setCheckpointDir(checkpoint_dir)
             logger.info(f"Checkpoint directory set to: {checkpoint_dir}")
-    
+
     @classmethod
     def get_session_info(cls) -> Dict[str, Any]:
         """Get information about current Spark session"""
         if cls._instance is None:
             return {'status': 'No active session'}
-        
+
         sc = cls._instance.sparkContext
         conf = sc.getConf()
-        
+
         return {
             'status': 'Active',
             'app_name': sc.appName,
@@ -130,7 +130,7 @@ def create_optimized_session(
     environment: str = "development"
 ) -> SparkSession:
     """Create Spark session with environment-specific optimizations"""
-    
+
     configs = {
         'development': {
             'master': 'local[*]',
@@ -155,6 +155,6 @@ def create_optimized_session(
             'log_level': 'ERROR'
         }
     }
-    
+
     config = configs.get(environment, configs['development'])
     return SparkSessionManager.get_or_create_session(app_name, config)

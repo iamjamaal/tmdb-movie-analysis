@@ -16,18 +16,18 @@ class KPICalculator:
     """
     Calculates Key Performance Indicators for movie analysis
     """
-    
+
     def __init__(self, config: Dict[str, Any]):
         """
         Initialize KPICalculator
-        
+
         Args:
             config: Configuration dictionary
         """
         self.config = config
         self.kpi_config = config.get('kpis', {})
         logger.info("KPICalculator initialized")
-    
+
     def rank_movies_by_metric(
         self,
         df: DataFrame,
@@ -39,7 +39,7 @@ class KPICalculator:
     ) -> DataFrame:
         """
         Generic function to rank movies by any metric
-        
+
         Args:
             df: Input DataFrame
             metric_name: Name of the metric (for logging)
@@ -47,64 +47,64 @@ class KPICalculator:
             ascending: Sort order
             filter_condition: Optional SQL filter condition
             top_n: Number of top movies to return
-            
+
         Returns:
             DataFrame with top N movies
         """
         logger.info(f"Calculating {metric_name}")
-        
+
         # Apply filter if specified
         if filter_condition:
             filtered_df = df.filter(filter_condition)
         else:
             filtered_df = df
-        
+
         # Rank movies
         ranked_df = filtered_df.orderBy(
             F.col(column).asc() if ascending else F.col(column).desc()
         ).limit(top_n)
-        
+
         # Add rank column
         ranked_df = ranked_df.withColumn(
             "rank",
             F.row_number().over(Window.orderBy(F.col(column).asc() if ascending else F.col(column).desc()))
         )
-        
+
         # Select relevant columns (avoid duplicate columns)
         base_columns = ["rank", "id", "title", "release_year"]
         metric_columns = ["budget_musd", "revenue_musd", "vote_average", "vote_count"]
-        
+
         # Add the ranking column if it's not already in the base metrics
         if column not in base_columns and column not in metric_columns:
             columns_to_select = base_columns + [column] + metric_columns
         else:
             columns_to_select = base_columns + metric_columns
-        
+
         result = ranked_df.select(*columns_to_select)
-        
+
         count = result.count()
         logger.info(f"{metric_name}: {count} movies ranked")
-        
+
         return result
-    
+
     def analyze_franchise_performance(self, df: DataFrame) -> DataFrame:
         """
         Compare movie franchises (belongs_to_collection) vs. standalone movies
-        
+
         Args:
             df: Input DataFrame
-            
+
         Returns:
             DataFrame with franchise vs standalone metrics
         """
         logger.info("Analyzing franchise vs standalone performance")
-        
+
         # Create flag for franchise membership
         df_with_flag = df.withColumn(
             "is_franchise",
             F.when(F.col("belongs_to_collection").isNotNull(), "Franchise").otherwise("Standalone")
         )
-        
+
         # Calculate metrics
         stats = df_with_flag.groupBy("is_franchise").agg(
             F.mean("revenue_musd").alias("mean_revenue"),
@@ -114,23 +114,23 @@ class KPICalculator:
             F.mean("vote_average").alias("mean_rating"),
             F.count("id").alias("movie_count")
         )
-        
+
         return stats
 
     def get_most_successful_franchises(self, df: DataFrame) -> DataFrame:
         """
         Find the Most Successful Movie Franchises
-        
+
         Args:
             df: Input DataFrame
-            
+
         Returns:
             DataFrame with franchise statistics
         """
         logger.info("Identifying most successful franchises")
-        
+
         franchise_df = df.filter(F.col("belongs_to_collection").isNotNull())
-        
+
         stats = franchise_df.groupBy("belongs_to_collection").agg(
             F.count("id").alias("movie_count"),
             F.sum("budget_musd").alias("total_budget"),
@@ -139,166 +139,166 @@ class KPICalculator:
             F.mean("revenue_musd").alias("mean_revenue"),
             F.mean("vote_average").alias("mean_rating")
         ).orderBy(F.col("total_revenue").desc())
-        
+
         return stats
 
     def get_most_successful_directors(self, df: DataFrame) -> DataFrame:
         """
         Find the Most Successful Directors
-        
+
         Args:
             df: Input DataFrame
-            
+
         Returns:
             DataFrame with director statistics
         """
         logger.info("Identifying most successful directors")
-        
+
         # Ensure director column exists and filter nulls
         director_df = df.filter(F.col("director").isNotNull())
-        
+
         stats = director_df.groupBy("director").agg(
             F.count("id").alias("movie_count"),
             F.sum("revenue_musd").alias("total_revenue"),
             F.mean("vote_average").alias("mean_rating")
         ).orderBy(F.col("total_revenue").desc())
-        
+
         return stats
 
     def run_search_queries(self, df: DataFrame) -> Dict[str, DataFrame]:
         """
         Run specific search queries from requirements
-        
+
         Args:
             df: Input DataFrame
-            
+
         Returns:
             Dictionary of search result DataFrames
         """
         logger.info("Running advanced search queries")
         results = {}
-        
+
         # Search 1: Best-rated Science Fiction Action movies starring Bruce Willis (sorted by Rating - highest to lowest)
         # Criteria:
         # - Genres contains "Science Fiction" AND "Action"
         # - Cast contains "Bruce Willis"
         # - Sort by vote_average DESC
-        
+
         logger.info("Executing Search 1: Bruce Willis + Sci-Fi + Action")
-        
+
         # Note: 'genres' and 'cast' are pipe-separated strings
         # (e.g., "Action|Science Fiction" and "Actor A|Actor B")
-        
+
         results["bruce_willis_scifi_action"] = df.filter(
-            (F.col("genres").contains("Science Fiction")) & 
-            (F.col("genres").contains("Action")) & 
+            (F.col("genres").contains("Science Fiction")) &
+            (F.col("genres").contains("Action")) &
             (F.col("cast").contains("Bruce Willis"))
         ).orderBy(F.col("vote_average").desc())
-        
+
         # Search 2: Find movies starring Uma Thurman, directed by Quentin Tarantino (sorted by runtime - shortest to longest)
         # Criteria:
         # - Cast contains "Uma Thurman"
         # - Director is "Quentin Tarantino"
         # - Sort by runtime ASC
-        
+
         logger.info("Executing Search 2: Uma Thurman + Tarantino")
-        
+
         results["uma_thurman_tarantino"] = df.filter(
-            (F.col("cast").contains("Uma Thurman")) & 
+            (F.col("cast").contains("Uma Thurman")) &
             (F.col("director") == "Quentin Tarantino")
         ).orderBy(F.col("runtime").asc())
-        
+
         return results
 
     def get_roi_by_genre(self, df: DataFrame) -> DataFrame:
         """
         Calculate ROI distribution by genre.
         Explodes the genres column to have one row per genre per movie.
-        
+
         Args:
             df: Input DataFrame
-            
+
         Returns:
             DataFrame with 'genre' and 'roi' columns
         """
         logger.info("Calculating ROI by Genre")
-        
+
         # Genres are pipe-separated strings, so we split them first
-        df_exploded = df.withColumn("genre", F.explode(F.split(F.col("genres"), "\|")))
-        
+        df_exploded = df.withColumn("genre", F.explode(F.split(F.col("genres"), r"\|")))
+
         # Filter out null ROIs and empty genres
         df_roi_genre = df_exploded.filter(
-            (F.col("roi").isNotNull()) & 
-            (F.col("genre").isNotNull()) & 
+            (F.col("roi").isNotNull()) &
+            (F.col("genre").isNotNull()) &
             (F.col("genre") != "")
         ).select("genre", "roi")
-        
+
         return df_roi_genre
 
     def get_all_rankings(self, df: DataFrame) -> Dict[str, DataFrame]:
         """
         Calculate all configured ranking KPIs
-        
+
         Args:
             df: Input DataFrame
-            
+
         Returns:
             Dictionary of ranking DataFrames
         """
         logger.info("Calculating all ranking KPIs")
-        
+
         rankings = {}
-        
+
         # 1. Highest Revenue
         rankings["highest_revenue"] = self.rank_movies_by_metric(df, "Highest Revenue", "revenue_musd", ascending=False)
-        
+
         # 2. Highest Budget
         rankings["highest_budget"] = self.rank_movies_by_metric(df, "Highest Budget", "budget_musd", ascending=False)
-        
+
         # 3. Highest Profit
         rankings["highest_profit"] = self.rank_movies_by_metric(df, "Highest Profit", "profit_musd", ascending=False)
-        
+
         # 4. Lowest Profit
         rankings["lowest_profit"] = self.rank_movies_by_metric(df, "Lowest Profit", "profit_musd", ascending=True)
-        
+
         # 5. Highest ROI (Budget >= 10M)
         rankings["highest_roi"] = self.rank_movies_by_metric(
             df, "Highest ROI", "roi", ascending=False, filter_condition="budget_musd >= 10"
         )
-        
+
         # 6. Lowest ROI (Budget >= 10M)
         rankings["lowest_roi"] = self.rank_movies_by_metric(
             df, "Lowest ROI", "roi", ascending=True, filter_condition="budget_musd >= 10"
         )
-        
+
         # 7. Most Voted Movies
         rankings["most_voted"] = self.rank_movies_by_metric(df, "Most Voted", "vote_count", ascending=False)
-        
+
         # 8. Highest Rated Movies (votes >= 10)
         rankings["highest_rated"] = self.rank_movies_by_metric(
             df, "Highest Rated", "vote_average", ascending=False, filter_condition="vote_count >= 10"
         )
-        
+
         # 9. Lowest Rated Movies (votes >= 10)
         rankings["lowest_rated"] = self.rank_movies_by_metric(
             df, "Lowest Rated", "vote_average", ascending=True, filter_condition="vote_count >= 10"
         )
-        
+
         # 10. Most Popular Movies
         rankings["most_popular"] = self.rank_movies_by_metric(df, "Most Popular", "popularity", ascending=False)
-        
+
         return rankings
-        
+
         rankings = {}
         metrics = self.kpi_config.get('rankings', {}).get('metrics', [])
         top_n = self.kpi_config.get('rankings', {}).get('top_n', 10)
-        
+
         for metric in metrics:
             name = metric.get('name')
             column = metric.get('column')
             ascending = metric.get('ascending', False)
             filter_cond = metric.get('filter', None)
-            
+
             rankings[name] = self.rank_movies_by_metric(
                 df=df,
                 metric_name=name,
@@ -307,22 +307,22 @@ class KPICalculator:
                 filter_condition=filter_cond,
                 top_n=top_n
             )
-        
+
         logger.info(f"Calculated {len(rankings)} ranking KPIs")
         return rankings
-    
+
     def analyze_franchise_vs_standalone(self, df: DataFrame) -> DataFrame:
         """
         Compare franchise movies vs standalone movies
-        
+
         Args:
             df: Input DataFrame
-            
+
         Returns:
             DataFrame with comparison metrics
         """
         logger.info("Analyzing franchise vs standalone movies")
-        
+
         comparison = df.groupBy("has_franchise").agg(
             F.count("*").alias("movie_count"),
             F.mean("revenue_musd").alias("mean_revenue"),
@@ -335,24 +335,24 @@ class KPICalculator:
             F.mean("vote_average").alias("mean_rating"),
             F.mean("profit_musd").alias("mean_profit")
         ).orderBy("has_franchise", ascending=False)
-        
+
         return comparison
-    
+
     def get_top_franchises(self, df: DataFrame) -> DataFrame:
         """
         Identify most successful movie franchises
-        
+
         Args:
             df: Input DataFrame
-            
+
         Returns:
             DataFrame with franchise statistics
         """
         logger.info("Calculating top franchises")
-        
+
         # Filter for franchise movies only
         franchise_df = df.filter(F.col("has_franchise") == True)
-        
+
         franchise_stats = franchise_df.groupBy("belongs_to_collection").agg(
             F.count("*").alias("total_movies"),
             F.sum("budget_musd").alias("total_budget"),
@@ -366,28 +366,28 @@ class KPICalculator:
             F.mean("popularity").alias("mean_popularity"),
             F.sum("vote_count").alias("total_votes")
         ).orderBy("total_revenue", ascending=False)
-        
+
         logger.info(f"Analyzed {franchise_stats.count()} franchises")
-        
+
         return franchise_stats
-    
+
     def get_top_directors(self, df: DataFrame) -> DataFrame:
         """
         Identify most successful directors
-        
+
         Args:
             df: Input DataFrame
-            
+
         Returns:
             DataFrame with director statistics
         """
         logger.info("Calculating top directors")
-        
+
         # Filter for movies with directors
         director_df = df.filter(F.col("director").isNotNull())
-        
+
         min_movies = self.kpi_config.get('director', {}).get('min_movies', 1)
-        
+
         director_stats = director_df.groupBy("director").agg(
             F.count("*").alias("total_movies"),
             F.sum("revenue_musd").alias("total_revenue"),
@@ -400,26 +400,26 @@ class KPICalculator:
             F.mean("budget_musd").alias("avg_budget")
         ).filter(F.col("total_movies") >= min_movies) \
           .orderBy("total_revenue", ascending=False)
-        
+
         logger.info(f"Analyzed {director_stats.count()} directors")
-        
+
         return director_stats
-    
+
     def calculate_genre_performance(self, df: DataFrame) -> DataFrame:
         """
         Calculate performance metrics by genre
-        
+
         Args:
             df: Input DataFrame
-            
+
         Returns:
             DataFrame with genre performance
         """
         logger.info("Calculating genre performance")
-        
+
         # Split genres and explode
         genre_df = df.withColumn("genre", F.explode(F.split(F.col("genres"), "\\|")))
-        
+
         genre_stats = genre_df.groupBy("genre").agg(
             F.count("*").alias("movie_count"),
             F.mean("revenue_musd").alias("avg_revenue"),
@@ -431,23 +431,23 @@ class KPICalculator:
             F.mean("popularity").alias("avg_popularity"),
             F.sum("revenue_musd").alias("total_revenue")
         ).orderBy("total_revenue", ascending=False)
-        
+
         logger.info(f"Analyzed {genre_stats.count()} genres")
-        
+
         return genre_stats
-    
+
     def calculate_yearly_trends(self, df: DataFrame) -> DataFrame:
         """
         Calculate yearly trends in box office performance
-        
+
         Args:
             df: Input DataFrame
-            
+
         Returns:
             DataFrame with yearly statistics
         """
         logger.info("Calculating yearly trends")
-        
+
         yearly_stats = df.groupBy("release_year").agg(
             F.count("*").alias("movies_released"),
             F.sum("revenue_musd").alias("total_revenue"),
@@ -458,21 +458,21 @@ class KPICalculator:
             F.mean("vote_average").alias("avg_rating"),
             F.mean("popularity").alias("avg_popularity")
         ).orderBy("release_year")
-        
+
         return yearly_stats
-    
+
     def calculate_decade_trends(self, df: DataFrame) -> DataFrame:
         """
         Calculate trends by decade
-        
+
         Args:
             df: Input DataFrame
-            
+
         Returns:
             DataFrame with decade statistics
         """
         logger.info("Calculating decade trends")
-        
+
         decade_stats = df.groupBy("decade").agg(
             F.count("*").alias("movies_released"),
             F.sum("revenue_musd").alias("total_revenue"),
@@ -481,21 +481,21 @@ class KPICalculator:
             F.mean("roi").alias("avg_roi"),
             F.mean("vote_average").alias("avg_rating")
         ).orderBy("decade")
-        
+
         return decade_stats
-    
+
     def calculate_language_performance(self, df: DataFrame) -> DataFrame:
         """
         Calculate performance by original language
-        
+
         Args:
             df: Input DataFrame
-            
+
         Returns:
             DataFrame with language statistics
         """
         logger.info("Calculating language performance")
-        
+
         language_stats = df.groupBy("original_language").agg(
             F.count("*").alias("movie_count"),
             F.mean("revenue_musd").alias("avg_revenue"),
@@ -504,21 +504,21 @@ class KPICalculator:
             F.sum("revenue_musd").alias("total_revenue")
         ).filter(F.col("movie_count") >= 2) \
           .orderBy("total_revenue", ascending=False)
-        
+
         return language_stats
-    
+
     def calculate_budget_category_performance(self, df: DataFrame) -> DataFrame:
         """
         Calculate performance by budget category
-        
+
         Args:
             df: Input DataFrame
-            
+
         Returns:
             DataFrame with budget category statistics
         """
         logger.info("Calculating budget category performance")
-        
+
         budget_stats = df.groupBy("budget_category").agg(
             F.count("*").alias("movie_count"),
             F.mean("revenue_musd").alias("avg_revenue"),
@@ -532,21 +532,21 @@ class KPICalculator:
             .when(F.col("budget_category") == "High", 4)
             .otherwise(5)
         )
-        
+
         return budget_stats
-    
+
     def generate_summary_statistics(self, df: DataFrame) -> Dict[str, Any]:
         """
         Generate overall summary statistics
-        
+
         Args:
             df: Input DataFrame
-            
+
         Returns:
             Dictionary with summary statistics
         """
         logger.info("Generating summary statistics")
-        
+
         summary = df.agg(
             F.count("*").alias("total_movies"),
             F.sum("revenue_musd").alias("total_revenue"),
@@ -563,21 +563,21 @@ class KPICalculator:
             F.countDistinct("director").alias("unique_directors"),
             F.sum(F.when(F.col("has_franchise"), 1).otherwise(0)).alias("franchise_movies")
         ).collect()[0].asDict()
-        
+
         return summary
-    
+
     def calculate_all_kpis(self, df: DataFrame) -> Dict[str, Any]:
         """
         Calculate all KPIs
-        
+
         Args:
             df: Input DataFrame
-            
+
         Returns:
             Dictionary with all KPI results
         """
         logger.info("Calculating all KPIs")
-        
+
         kpis = {
             'rankings': self.get_all_rankings(df),
             'franchise_comparison': self.analyze_franchise_vs_standalone(df),
@@ -590,9 +590,9 @@ class KPICalculator:
             'budget_category_performance': self.calculate_budget_category_performance(df),
             'summary_statistics': self.generate_summary_statistics(df)
         }
-        
+
         logger.info("All KPIs calculated successfully")
-        
+
         return kpis
 
 
@@ -620,7 +620,7 @@ class KPICalculator:
             elif isinstance(kpi_value, dict):
                 # Check first value to determine dict type
                 first_value = next(iter(kpi_value.values())) if kpi_value else None
-                
+
                 if isinstance(first_value, DataFrame):
                     # Dict of DataFrames (e.g., rankings)
                     for sub_name, df in kpi_value.items():

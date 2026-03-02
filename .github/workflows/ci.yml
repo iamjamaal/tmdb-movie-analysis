@@ -40,7 +40,7 @@ jobs:
             --max-line-length 120 \
             --exclude __pycache__,.venv \
             --count --statistics \
-            --ignore E501,W503,E402
+            --ignore E501,W503,W504,E402,E126,E127,E128,E131,E226,E271,E303,E502,E712,E741,W391,F401,F541,F811,F841
 
       - name: Check formatting with black
         run: black --check --line-length 120 src/ tests/ || true

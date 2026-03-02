@@ -42,7 +42,7 @@ except Exception:
 
 class DashboardGenerator:
     """Generate comprehensive visualizations and interactive dashboards"""
-    
+
     def __init__(self, config: Dict[str, Any]):
         self.config = config
         # Prefer explicit output base from config (output.base_path), fallback to legacy keys
@@ -57,11 +57,11 @@ class DashboardGenerator:
             self.output_dir = Path(config.get('paths', {}).get('output', './data/output'))
         self.viz_dir = self.output_dir / 'visualizations'
         self.viz_dir.mkdir(parents=True, exist_ok=True)
-        
+
         # Set modern style
         plt.style.use('seaborn-v0_8-darkgrid')
         sns.set_palette("husl")
-        
+
         # Color schemes
         self.colors = {
             'primary': '#3498db',
@@ -72,7 +72,7 @@ class DashboardGenerator:
             'dark': '#2c3e50',
             'light': '#ecf0f1'
         }
-        
+
     def create_executive_summary_dashboard(
         self,
         df: DataFrame,
@@ -81,38 +81,38 @@ class DashboardGenerator:
     ) -> str:
         """Create executive summary dashboard with key metrics"""
         logger.info("Creating executive summary dashboard")
-        
+
         # Calculate summary metrics
         total_movies = df.count()
         total_revenue = df.select(F.sum('revenue_musd')).collect()[0][0] or 0
         avg_rating = df.select(F.avg('vote_average')).collect()[0][0] or 0
         total_budget = df.select(F.sum('budget_musd')).collect()[0][0] or 0
-        
+
         # Calculate ROI
         roi_df = df.filter((F.col('budget_musd') > 0) & (F.col('revenue_musd') > 0))
         avg_roi = roi_df.select(
             F.avg((F.col('revenue_musd') / F.col('budget_musd') - 1) * 100)
         ).collect()[0][0] or 0
-        
+
         # Get top genre
         top_genre = df.withColumn('genre', F.explode(F.split('genres', '\\|'))) \
                      .groupBy('genre').count() \
                      .orderBy(F.desc('count')) \
                      .limit(1).collect()
         top_genre_name = top_genre[0]['genre'] if top_genre else 'N/A'
-        
+
         # Create figure with subplots
         fig = plt.figure(figsize=(20, 12))
         gs = fig.add_gridspec(3, 4, hspace=0.3, wspace=0.3)
-        
+
         # Title
-        fig.suptitle('TMDB Movie Data Analysis - Executive Summary', 
+        fig.suptitle('TMDB Movie Data Analysis - Executive Summary',
                     fontsize=24, fontweight='bold', y=0.98)
-        
+
         # Add subtitle with timestamp
         fig.text(0.5, 0.94, f'Generated: {datetime.now().strftime("%Y-%m-%d %H:%M")}',
                 ha='center', fontsize=12, style='italic', color='gray')
-        
+
         # === KPI Cards (Top Row) ===
         kpi_data = [
             ('Total Movies', f'{total_movies:,}', self.colors['primary'], '🎬'),
@@ -120,20 +120,20 @@ class DashboardGenerator:
             ('Average Rating', f'{avg_rating:.2f}/10', self.colors['warning'], '⭐'),
             ('Average ROI', f'{avg_roi:.1f}%', self.colors['info'], '📈')
         ]
-        
+
         for idx, (title, value, color, emoji) in enumerate(kpi_data):
             ax = fig.add_subplot(gs[0, idx])
             ax.axis('off')
-            
+
             # Create card background
             rect = mpatches.FancyBboxPatch((0.1, 0.1), 0.8, 0.8,
                                           boxstyle="round,pad=0.1",
                                           facecolor=color, alpha=0.2,
                                           edgecolor=color, linewidth=2)
             ax.add_patch(rect)
-            
+
             # Add emoji and title
-            ax.text(0.5, 0.7, emoji, ha='center', va='center', 
+            ax.text(0.5, 0.7, emoji, ha='center', va='center',
                    fontsize=40, transform=ax.transAxes)
             ax.text(0.5, 0.45, title, ha='center', va='center',
                    fontsize=12, fontweight='bold', transform=ax.transAxes)
@@ -142,32 +142,32 @@ class DashboardGenerator:
                    transform=ax.transAxes)
             ax.set_xlim(0, 1)
             ax.set_ylim(0, 1)
-        
+
         # === Revenue vs Budget Scatter (Middle Left) ===
         ax1 = fig.add_subplot(gs[1, :2])
         scatter_data = df.select('budget_musd', 'revenue_musd', 'vote_average') \
                         .filter((F.col('budget_musd') > 0) & (F.col('revenue_musd') > 0)) \
                         .limit(500).toPandas()
-        
-        scatter = ax1.scatter(scatter_data['budget_musd'], 
+
+        scatter = ax1.scatter(scatter_data['budget_musd'],
                             scatter_data['revenue_musd'],
                             c=scatter_data['vote_average'],
                             cmap='RdYlGn', s=100, alpha=0.6, edgecolors='black')
-        
+
         # Add break-even line
         max_val = max(scatter_data['budget_musd'].max(), scatter_data['revenue_musd'].max())
         ax1.plot([0, max_val], [0, max_val], 'r--', alpha=0.5, linewidth=2, label='Break-even')
-        
+
         ax1.set_xlabel('Budget (Million USD)', fontsize=12, fontweight='bold')
         ax1.set_ylabel('Revenue (Million USD)', fontsize=12, fontweight='bold')
         ax1.set_title('Revenue vs Budget Analysis', fontsize=14, fontweight='bold')
         ax1.legend(loc='upper left')
         ax1.grid(True, alpha=0.3)
-        
+
         # Add colorbar
         cbar = plt.colorbar(scatter, ax=ax1)
         cbar.set_label('Rating', fontsize=10)
-        
+
         # === Top 10 Genres by Revenue (Middle Right) ===
         ax2 = fig.add_subplot(gs[1, 2:])
         genre_data = df.withColumn('genre', F.explode(F.split('genres', '\\|'))) \
@@ -175,7 +175,7 @@ class DashboardGenerator:
                       .agg(F.sum('revenue_musd').alias('total_revenue')) \
                       .orderBy(F.desc('total_revenue')) \
                       .limit(10).toPandas()
-        
+
         bars = ax2.barh(range(len(genre_data)), genre_data['total_revenue'],
                        color=sns.color_palette("viridis", len(genre_data)))
         ax2.set_yticks(range(len(genre_data)))
@@ -183,18 +183,18 @@ class DashboardGenerator:
         ax2.set_xlabel('Total Revenue (Million USD)', fontsize=12, fontweight='bold')
         ax2.set_title('Top 10 Genres by Revenue', fontsize=14, fontweight='bold')
         ax2.grid(True, axis='x', alpha=0.3)
-        
+
         # Add value labels
         for i, bar in enumerate(bars):
             width = bar.get_width()
             ax2.text(width, bar.get_y() + bar.get_height()/2,
                     f'${width:,.0f}M',
                     ha='left', va='center', fontsize=9, fontweight='bold')
-        
+
         # === Rating Distribution (Bottom Left) ===
         ax3 = fig.add_subplot(gs[2, 0])
         ratings = df.select('vote_average').filter(F.col('vote_average').isNotNull()).toPandas()
-        
+
         ax3.hist(ratings['vote_average'], bins=20, color=self.colors['info'],
                 alpha=0.7, edgecolor='black')
         ax3.axvline(avg_rating, color='red', linestyle='--', linewidth=2,
@@ -204,13 +204,13 @@ class DashboardGenerator:
         ax3.set_title('Rating Distribution', fontsize=14, fontweight='bold')
         ax3.legend()
         ax3.grid(True, alpha=0.3)
-        
+
         # === ROI Distribution (Bottom Middle) ===
         ax4 = fig.add_subplot(gs[2, 1])
         roi_data = roi_df.select(
             ((F.col('revenue_musd') / F.col('budget_musd') - 1) * 100).alias('roi')
         ).filter(F.col('roi').between(-100, 500)).toPandas()
-        
+
         ax4.hist(roi_data['roi'], bins=30, color=self.colors['success'],
                 alpha=0.7, edgecolor='black')
         ax4.axvline(0, color='red', linestyle='--', linewidth=2, label='Break-even')
@@ -221,7 +221,7 @@ class DashboardGenerator:
         ax4.set_title('ROI Distribution', fontsize=14, fontweight='bold')
         ax4.legend()
         ax4.grid(True, alpha=0.3)
-        
+
         # === Yearly Revenue Trend (Bottom Right - Spans 2 columns) ===
         ax5 = fig.add_subplot(gs[2, 2:])
         yearly_data = df.withColumn('year', F.year('release_date')) \
@@ -229,42 +229,42 @@ class DashboardGenerator:
                        .agg(F.sum('revenue_musd').alias('total_revenue'),
                            F.count('*').alias('movie_count')) \
                        .orderBy('year').toPandas()
-        
+
         ax5_twin = ax5.twinx()
-        
+
         line1 = ax5.plot(yearly_data['year'], yearly_data['total_revenue'],
                         marker='o', linewidth=2, color=self.colors['primary'],
                         label='Revenue')
         ax5.fill_between(yearly_data['year'], yearly_data['total_revenue'],
                         alpha=0.3, color=self.colors['primary'])
-        
+
         line2 = ax5_twin.plot(yearly_data['year'], yearly_data['movie_count'],
                              marker='s', linewidth=2, color=self.colors['danger'],
                              linestyle='--', label='Movie Count')
-        
+
         ax5.set_xlabel('Year', fontsize=12, fontweight='bold')
         ax5.set_ylabel('Total Revenue (Million USD)', fontsize=12, fontweight='bold',
                       color=self.colors['primary'])
         ax5_twin.set_ylabel('Number of Movies', fontsize=12, fontweight='bold',
                            color=self.colors['danger'])
         ax5.set_title('Revenue Trend Over Time', fontsize=14, fontweight='bold')
-        
+
         # Combine legends
         lines = line1 + line2
         labels = [l.get_label() for l in lines]
         ax5.legend(lines, labels, loc='upper left')
-        
+
         ax5.grid(True, alpha=0.3)
         ax5.tick_params(axis='y', labelcolor=self.colors['primary'])
         ax5_twin.tick_params(axis='y', labelcolor=self.colors['danger'])
-        
+
         output_path = self.viz_dir / output_file
         plt.savefig(output_path, dpi=300, bbox_inches='tight', facecolor='white')
         plt.close()
-        
+
         logger.info(f"Executive summary saved to {output_path}")
         return str(output_path)
-    
+
     def create_financial_performance_dashboard(
         self,
         df: DataFrame,
@@ -272,10 +272,10 @@ class DashboardGenerator:
     ) -> str:
         """Create detailed financial performance dashboard"""
         logger.info("Creating financial performance dashboard")
-        
+
         fig, axes = plt.subplots(2, 3, figsize=(20, 12))
         fig.suptitle('Financial Performance Analysis', fontsize=20, fontweight='bold')
-        
+
         # 1. Budget Distribution by Tier
         budget_tiers = df.withColumn(
             'budget_tier',
@@ -284,48 +284,48 @@ class DashboardGenerator:
              .when(F.col('budget_musd') < 100, 'High ($50M-$100M)')
              .otherwise('Blockbuster (>$100M)')
         ).groupBy('budget_tier').count().toPandas()
-        
+
         axes[0, 0].pie(budget_tiers['count'], labels=budget_tiers['budget_tier'],
                       autopct='%1.1f%%', startangle=90,
                       colors=sns.color_palette("Set2"))
         axes[0, 0].set_title('Budget Distribution', fontsize=14, fontweight='bold')
-        
+
         # 2. Top 10 Highest Revenue Movies
         top_revenue = df.select('title', 'revenue_musd') \
                        .orderBy(F.desc('revenue_musd')) \
                        .limit(10).toPandas()
-        
+
         bars = axes[0, 1].barh(range(len(top_revenue)), top_revenue['revenue_musd'],
                               color=self.colors['success'])
         axes[0, 1].set_yticks(range(len(top_revenue)))
-        axes[0, 1].set_yticklabels([t[:20] + '...' if len(t) > 20 else t 
+        axes[0, 1].set_yticklabels([t[:20] + '...' if len(t) > 20 else t
                                    for t in top_revenue['title']], fontsize=9)
         axes[0, 1].set_xlabel('Revenue (Million USD)', fontweight='bold')
         axes[0, 1].set_title('Top 10 Highest Revenue', fontsize=14, fontweight='bold')
         axes[0, 1].grid(True, axis='x', alpha=0.3)
-        
+
         # 3. Top 10 Best ROI
         top_roi = df.filter((F.col('budget_musd') >= 10) & (F.col('revenue_musd') > 0)) \
                    .withColumn('roi', (F.col('revenue_musd') / F.col('budget_musd') - 1) * 100) \
                    .select('title', 'roi') \
                    .orderBy(F.desc('roi')) \
                    .limit(10).toPandas()
-        
+
         bars = axes[0, 2].barh(range(len(top_roi)), top_roi['roi'],
                               color=self.colors['warning'])
         axes[0, 2].set_yticks(range(len(top_roi)))
-        axes[0, 2].set_yticklabels([t[:20] + '...' if len(t) > 20 else t 
+        axes[0, 2].set_yticklabels([t[:20] + '...' if len(t) > 20 else t
                                    for t in top_roi['title']], fontsize=9)
         axes[0, 2].set_xlabel('ROI (%)', fontweight='bold')
         axes[0, 2].set_title('Top 10 Best ROI', fontsize=14, fontweight='bold')
         axes[0, 2].grid(True, axis='x', alpha=0.3)
-        
+
         # 4. Profit vs Budget Scatter
         profit_data = df.filter((F.col('budget_musd') > 0) & (F.col('revenue_musd') > 0)) \
                        .withColumn('profit', F.col('revenue_musd') - F.col('budget_musd')) \
                        .select('budget_musd', 'profit') \
                        .limit(500).toPandas()
-        
+
         axes[1, 0].scatter(profit_data['budget_musd'], profit_data['profit'],
                           alpha=0.6, s=80, c=self.colors['info'], edgecolors='black')
         axes[1, 0].axhline(0, color='red', linestyle='--', alpha=0.5, label='Break-even')
@@ -334,7 +334,7 @@ class DashboardGenerator:
         axes[1, 0].set_title('Profit vs Budget', fontsize=14, fontweight='bold')
         axes[1, 0].legend()
         axes[1, 0].grid(True, alpha=0.3)
-        
+
         # 5. Revenue by Production Company (Top 10)
         company_revenue = df.withColumn('company', F.explode(F.split('production_companies', '\\|'))) \
                            .groupBy('company') \
@@ -343,16 +343,16 @@ class DashboardGenerator:
                            .filter(F.col('movie_count') >= 3) \
                            .orderBy(F.desc('total_revenue')) \
                            .limit(10).toPandas()
-        
+
         bars = axes[1, 1].barh(range(len(company_revenue)), company_revenue['total_revenue'],
                               color=sns.color_palette("coolwarm", len(company_revenue)))
         axes[1, 1].set_yticks(range(len(company_revenue)))
-        axes[1, 1].set_yticklabels([c[:25] + '...' if len(c) > 25 else c 
+        axes[1, 1].set_yticklabels([c[:25] + '...' if len(c) > 25 else c
                                    for c in company_revenue['company']], fontsize=9)
         axes[1, 1].set_xlabel('Total Revenue (Million USD)', fontweight='bold')
         axes[1, 1].set_title('Top Production Companies', fontsize=14, fontweight='bold')
         axes[1, 1].grid(True, axis='x', alpha=0.3)
-        
+
         # 6. Franchise vs Standalone Comparison
         comparison = df.withColumn(
             'type',
@@ -362,15 +362,15 @@ class DashboardGenerator:
             F.avg('budget_musd').alias('avg_budget'),
             F.count('*').alias('count')
         ).toPandas()
-        
+
         x = np.arange(len(comparison))
         width = 0.35
-        
+
         axes[1, 2].bar(x - width/2, comparison['avg_revenue'], width,
                       label='Avg Revenue', color=self.colors['success'])
         axes[1, 2].bar(x + width/2, comparison['avg_budget'], width,
                       label='Avg Budget', color=self.colors['danger'])
-        
+
         axes[1, 2].set_xlabel('Movie Type', fontweight='bold')
         axes[1, 2].set_ylabel('Amount (Million USD)', fontweight='bold')
         axes[1, 2].set_title('Franchise vs Standalone', fontsize=14, fontweight='bold')
@@ -378,16 +378,16 @@ class DashboardGenerator:
         axes[1, 2].set_xticklabels(comparison['type'])
         axes[1, 2].legend()
         axes[1, 2].grid(True, axis='y', alpha=0.3)
-        
+
         plt.tight_layout()
-        
+
         output_path = self.viz_dir / output_file
         plt.savefig(output_path, dpi=300, bbox_inches='tight', facecolor='white')
         plt.close()
-        
+
         logger.info(f"Financial dashboard saved to {output_path}")
         return str(output_path)
-    
+
     def create_quality_metrics_dashboard(
         self,
         df: DataFrame,
@@ -395,15 +395,15 @@ class DashboardGenerator:
     ) -> str:
         """Create quality metrics and rating analysis dashboard"""
         logger.info("Creating quality metrics dashboard")
-        
+
         fig, axes = plt.subplots(2, 3, figsize=(20, 12))
         fig.suptitle('Quality Metrics & Rating Analysis', fontsize=20, fontweight='bold')
-        
+
         # 1. Rating vs Popularity
         rating_pop = df.select('vote_average', 'popularity', 'vote_count') \
                       .filter((F.col('vote_count') >= 100)) \
                       .limit(500).toPandas()
-        
+
         scatter = axes[0, 0].scatter(rating_pop['vote_average'], rating_pop['popularity'],
                                     c=rating_pop['vote_count'], cmap='plasma',
                                     s=100, alpha=0.6, edgecolors='black')
@@ -412,70 +412,70 @@ class DashboardGenerator:
         axes[0, 0].set_title('Rating vs Popularity', fontsize=14, fontweight='bold')
         axes[0, 0].grid(True, alpha=0.3)
         plt.colorbar(scatter, ax=axes[0, 0], label='Vote Count')
-        
+
         # 2. Top Rated Movies (min 100 votes)
         top_rated = df.filter(F.col('vote_count') >= 100) \
                      .select('title', 'vote_average') \
                      .orderBy(F.desc('vote_average')) \
                      .limit(10).toPandas()
-        
+
         bars = axes[0, 1].barh(range(len(top_rated)), top_rated['vote_average'],
                               color=sns.color_palette("YlGn", len(top_rated))[::-1])
         axes[0, 1].set_yticks(range(len(top_rated)))
-        axes[0, 1].set_yticklabels([t[:20] + '...' if len(t) > 20 else t 
+        axes[0, 1].set_yticklabels([t[:20] + '...' if len(t) > 20 else t
                                    for t in top_rated['title']], fontsize=9)
         axes[0, 1].set_xlabel('Rating', fontweight='bold')
         axes[0, 1].set_title('Top 10 Rated Movies', fontsize=14, fontweight='bold')
         axes[0, 1].set_xlim(0, 10)
         axes[0, 1].grid(True, axis='x', alpha=0.3)
-        
+
         # Add rating labels
         for i, bar in enumerate(bars):
             width = bar.get_width()
             axes[0, 1].text(width, bar.get_y() + bar.get_height()/2,
                            f'{width:.2f}',
                            ha='left', va='center', fontsize=9, fontweight='bold')
-        
+
         # 3. Rating by Genre (Violin Plot)
         genre_ratings = df.withColumn('genre', F.explode(F.split('genres', '\\|'))) \
                          .select('genre', 'vote_average') \
                          .filter(F.col('vote_average').isNotNull()).toPandas()
-        
+
         top_genres = genre_ratings['genre'].value_counts().head(8).index.tolist()
         genre_ratings_filtered = genre_ratings[genre_ratings['genre'].isin(top_genres)]
-        
+
         parts = axes[0, 2].violinplot([genre_ratings_filtered[genre_ratings_filtered['genre'] == g]['vote_average'].values
                                        for g in top_genres],
                                       positions=range(len(top_genres)),
                                       showmeans=True, showmedians=True)
-        
+
         for pc in parts['bodies']:
             pc.set_facecolor(self.colors['info'])
             pc.set_alpha(0.7)
-        
+
         axes[0, 2].set_xticks(range(len(top_genres)))
         axes[0, 2].set_xticklabels(top_genres, rotation=45, ha='right')
         axes[0, 2].set_ylabel('Rating', fontweight='bold')
         axes[0, 2].set_title('Rating Distribution by Genre', fontsize=14, fontweight='bold')
         axes[0, 2].grid(True, axis='y', alpha=0.3)
-        
+
         # 4. Vote Count Distribution
         vote_counts = df.select('vote_count').filter(F.col('vote_count') > 0).toPandas()
-        
+
         axes[1, 0].hist(vote_counts['vote_count'], bins=50, color=self.colors['primary'],
                        alpha=0.7, edgecolor='black', log=True)
         axes[1, 0].set_xlabel('Vote Count', fontweight='bold')
         axes[1, 0].set_ylabel('Frequency (log scale)', fontweight='bold')
         axes[1, 0].set_title('Vote Count Distribution', fontsize=14, fontweight='bold')
         axes[1, 0].grid(True, alpha=0.3)
-        
+
         # 5. Rating Trend Over Years
         yearly_ratings = df.withColumn('year', F.year('release_date')) \
                           .groupBy('year') \
                           .agg(F.avg('vote_average').alias('avg_rating'),
                               F.stddev('vote_average').alias('std_rating')) \
                           .orderBy('year').toPandas()
-        
+
         axes[1, 1].plot(yearly_ratings['year'], yearly_ratings['avg_rating'],
                        marker='o', linewidth=2, color=self.colors['success'])
         axes[1, 1].fill_between(yearly_ratings['year'],
@@ -486,27 +486,27 @@ class DashboardGenerator:
         axes[1, 1].set_ylabel('Average Rating', fontweight='bold')
         axes[1, 1].set_title('Rating Trend Over Time', fontsize=14, fontweight='bold')
         axes[1, 1].grid(True, alpha=0.3)
-        
+
         # 6. Most Popular Movies
         top_popular = df.select('title', 'popularity') \
                        .orderBy(F.desc('popularity')) \
                        .limit(10).toPandas()
-        
+
         bars = axes[1, 2].barh(range(len(top_popular)), top_popular['popularity'],
                               color=sns.color_palette("rocket", len(top_popular)))
         axes[1, 2].set_yticks(range(len(top_popular)))
-        axes[1, 2].set_yticklabels([t[:20] + '...' if len(t) > 20 else t 
+        axes[1, 2].set_yticklabels([t[:20] + '...' if len(t) > 20 else t
                                    for t in top_popular['title']], fontsize=9)
         axes[1, 2].set_xlabel('Popularity Score', fontweight='bold')
         axes[1, 2].set_title('Top 10 Most Popular', fontsize=14, fontweight='bold')
         axes[1, 2].grid(True, axis='x', alpha=0.3)
-        
+
         plt.tight_layout()
-        
+
         output_path = self.viz_dir / output_file
         plt.savefig(output_path, dpi=300, bbox_inches='tight', facecolor='white')
         plt.close()
-        
+
         logger.info(f"Quality metrics dashboard saved to {output_path}")
         return str(output_path)
 
@@ -517,22 +517,22 @@ class DashboardGenerator:
     ) -> str:
         """Create comprehensive genre analysis dashboard"""
         logger.info("Creating genre analysis dashboard")
-        
+
         fig = plt.figure(figsize=(20, 14))
         gs = fig.add_gridspec(3, 3, hspace=0.35, wspace=0.3)
-        
+
         fig.suptitle('Genre Analysis Deep Dive', fontsize=20, fontweight='bold')
-        
+
         # Explode genres for analysis
         genre_df = df.withColumn('genre', F.explode(F.split('genres', '\\|')))
-        
+
         # 1. Genre Revenue Breakdown (Pie Chart - Top 8)
         ax1 = fig.add_subplot(gs[0, 0])
         genre_revenue = genre_df.groupBy('genre') \
                                .agg(F.sum('revenue_musd').alias('total_revenue')) \
                                .orderBy(F.desc('total_revenue')) \
                                .limit(8).toPandas()
-        
+
         colors_pie = sns.color_palette("Set3", len(genre_revenue))
         wedges, texts, autotexts = ax1.pie(genre_revenue['total_revenue'],
                                            labels=genre_revenue['genre'],
@@ -540,20 +540,20 @@ class DashboardGenerator:
                                            startangle=90,
                                            colors=colors_pie,
                                            explode=[0.05] * len(genre_revenue))
-        
+
         for autotext in autotexts:
             autotext.set_color('white')
             autotext.set_fontweight('bold')
-        
-        ax1.set_title('Revenue Distribution by Genre (Top 8)', 
+
+        ax1.set_title('Revenue Distribution by Genre (Top 8)',
                      fontsize=14, fontweight='bold', pad=20)
-        
+
         # 2. Genre Movie Count
         ax2 = fig.add_subplot(gs[0, 1:])
         genre_count = genre_df.groupBy('genre').count() \
                              .orderBy(F.desc('count')) \
                              .limit(15).toPandas()
-        
+
         bars = ax2.bar(range(len(genre_count)), genre_count['count'],
                       color=sns.color_palette("viridis", len(genre_count)))
         ax2.set_xticks(range(len(genre_count)))
@@ -561,14 +561,14 @@ class DashboardGenerator:
         ax2.set_ylabel('Number of Movies', fontsize=12, fontweight='bold')
         ax2.set_title('Movie Count by Genre', fontsize=14, fontweight='bold')
         ax2.grid(True, axis='y', alpha=0.3)
-        
+
         # Add value labels on bars
         for i, bar in enumerate(bars):
             height = bar.get_height()
             ax2.text(bar.get_x() + bar.get_width()/2, height,
                     f'{int(height)}',
                     ha='center', va='bottom', fontsize=9, fontweight='bold')
-        
+
         # 3. Genre Performance Metrics (Heatmap)
         ax3 = fig.add_subplot(gs[1, :])
         genre_metrics = genre_df.groupBy('genre').agg(
@@ -580,37 +580,37 @@ class DashboardGenerator:
         ).filter(F.col('count') >= 5) \
          .orderBy(F.desc('avg_revenue')) \
          .limit(12).toPandas()
-        
+
         # Normalize metrics for heatmap
-        metrics_for_heatmap = genre_metrics[['avg_revenue', 'avg_budget', 
+        metrics_for_heatmap = genre_metrics[['avg_revenue', 'avg_budget',
                                              'avg_rating', 'avg_popularity']].copy()
         metrics_normalized = (metrics_for_heatmap - metrics_for_heatmap.min()) / \
                            (metrics_for_heatmap.max() - metrics_for_heatmap.min())
-        
+
         im = ax3.imshow(metrics_normalized.T, cmap='YlOrRd', aspect='auto')
-        
+
         ax3.set_xticks(range(len(genre_metrics)))
         ax3.set_xticklabels(genre_metrics['genre'], rotation=45, ha='right')
         ax3.set_yticks(range(len(metrics_normalized.columns)))
         ax3.set_yticklabels(['Avg Revenue', 'Avg Budget', 'Avg Rating', 'Avg Popularity'])
-        ax3.set_title('Genre Performance Heatmap (Normalized)', 
+        ax3.set_title('Genre Performance Heatmap (Normalized)',
                      fontsize=14, fontweight='bold')
-        
+
         # Add colorbar
         cbar = plt.colorbar(im, ax=ax3)
         cbar.set_label('Normalized Score', rotation=270, labelpad=20)
-        
+
         # Add text annotations
         for i in range(len(metrics_normalized.columns)):
             for j in range(len(genre_metrics)):
                 text = ax3.text(j, i, f'{metrics_normalized.iloc[j, i]:.2f}',
                               ha="center", va="center", color="black", fontsize=8)
-        
+
         # 4. Genre ROI Comparison
         ax4 = fig.add_subplot(gs[2, 0])
-        genre_roi = genre_df.filter((F.col('budget_musd') > 10) & 
+        genre_roi = genre_df.filter((F.col('budget_musd') > 10) &
                                    (F.col('revenue_musd') > 0)) \
-                           .withColumn('roi', (F.col('revenue_musd') / 
+                           .withColumn('roi', (F.col('revenue_musd') /
                                              F.col('budget_musd') - 1) * 100) \
                            .groupBy('genre') \
                            .agg(F.avg('roi').alias('avg_roi'),
@@ -618,10 +618,10 @@ class DashboardGenerator:
                            .filter(F.col('count') >= 5) \
                            .orderBy(F.desc('avg_roi')) \
                            .limit(10).toPandas()
-        
-        colors_roi = ['green' if x > 100 else 'orange' if x > 0 else 'red' 
+
+        colors_roi = ['green' if x > 100 else 'orange' if x > 0 else 'red'
                      for x in genre_roi['avg_roi']]
-        
+
         bars = ax4.barh(range(len(genre_roi)), genre_roi['avg_roi'], color=colors_roi)
         ax4.set_yticks(range(len(genre_roi)))
         ax4.set_yticklabels(genre_roi['genre'])
@@ -629,7 +629,7 @@ class DashboardGenerator:
         ax4.set_title('Best ROI by Genre', fontsize=14, fontweight='bold')
         ax4.axvline(0, color='black', linestyle='--', alpha=0.5)
         ax4.grid(True, axis='x', alpha=0.3)
-        
+
         # 5. Genre Rating vs Revenue Scatter
         ax5 = fig.add_subplot(gs[2, 1])
         genre_scatter = genre_df.groupBy('genre').agg(
@@ -637,7 +637,7 @@ class DashboardGenerator:
             F.avg('vote_average').alias('avg_rating'),
             F.count('*').alias('count')
         ).filter(F.col('count') >= 5).toPandas()
-        
+
         scatter = ax5.scatter(genre_scatter['avg_rating'],
                             genre_scatter['avg_revenue'],
                             s=genre_scatter['count']*20,
@@ -645,47 +645,47 @@ class DashboardGenerator:
                             c=range(len(genre_scatter)),
                             cmap='rainbow',
                             edgecolors='black')
-        
+
         # Add genre labels
         for idx, row in genre_scatter.iterrows():
-            ax5.annotate(row['genre'], 
+            ax5.annotate(row['genre'],
                         (row['avg_rating'], row['avg_revenue']),
                         fontsize=8, alpha=0.7)
-        
+
         ax5.set_xlabel('Average Rating', fontsize=12, fontweight='bold')
         ax5.set_ylabel('Average Revenue (Million USD)', fontsize=12, fontweight='bold')
         ax5.set_title('Genre Quality vs Revenue', fontsize=14, fontweight='bold')
         ax5.grid(True, alpha=0.3)
-        
+
         # 6. Genre Evolution (Timeline)
         ax6 = fig.add_subplot(gs[2, 2])
-        
+
         # Get top 5 genres and their yearly revenue
         top_genres_list = genre_revenue.head(5)['genre'].tolist()
-        
+
         for genre in top_genres_list:
             genre_yearly = genre_df.filter(F.col('genre') == genre) \
                                   .withColumn('year', F.year('release_date')) \
                                   .groupBy('year') \
                                   .agg(F.sum('revenue_musd').alias('revenue')) \
                                   .orderBy('year').toPandas()
-            
+
             ax6.plot(genre_yearly['year'], genre_yearly['revenue'],
                     marker='o', label=genre, linewidth=2)
-        
+
         ax6.set_xlabel('Year', fontsize=12, fontweight='bold')
         ax6.set_ylabel('Revenue (Million USD)', fontsize=12, fontweight='bold')
         ax6.set_title('Genre Revenue Evolution', fontsize=14, fontweight='bold')
         ax6.legend(loc='best', fontsize=9)
         ax6.grid(True, alpha=0.3)
-        
+
         output_path = self.viz_dir / output_file
         plt.savefig(output_path, dpi=300, bbox_inches='tight', facecolor='white')
         plt.close()
-        
+
         logger.info(f"Genre analysis dashboard saved to {output_path}")
         return str(output_path)
-    
+
     def create_interactive_html_dashboard(
         self,
         df: DataFrame,
@@ -694,7 +694,7 @@ class DashboardGenerator:
     ) -> str:
         """Create interactive HTML dashboard with all insights"""
         logger.info("Creating interactive HTML dashboard")
-        
+
         # Calculate key metrics
         stats = df.agg(
             F.count('*').alias('total_movies'),
@@ -705,17 +705,17 @@ class DashboardGenerator:
             F.countDistinct('original_language').alias('languages'),
             F.countDistinct('director').alias('directors')
         ).collect()[0]
-        
+
         # Get top performers
         top_revenue_list = df.select('title', 'revenue_musd', 'vote_average') \
                             .orderBy(F.desc('revenue_musd')) \
                             .limit(10).toPandas()
-        
+
         top_rated_list = df.filter(F.col('vote_count') >= 100) \
                           .select('title', 'vote_average', 'vote_count') \
                           .orderBy(F.desc('vote_average')) \
                           .limit(10).toPandas()
-        
+
         # Genre data
         genre_stats = df.withColumn('genre', F.explode(F.split('genres', '\\|'))) \
                        .groupBy('genre') \
@@ -723,7 +723,7 @@ class DashboardGenerator:
                            F.sum('revenue_musd').alias('total_revenue')) \
                        .orderBy(F.desc('total_revenue')) \
                        .limit(10).toPandas()
-        
+
         html_content = f"""
 <!DOCTYPE html>
 <html lang="en">
@@ -737,19 +737,19 @@ class DashboardGenerator:
             padding: 0;
             box-sizing: border-box;
         }}
-        
+
         body {{
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
             background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
             color: #333;
             padding: 20px;
         }}
-        
+
         .container {{
             max-width: 1400px;
             margin: 0 auto;
         }}
-        
+
         header {{
             background: white;
             padding: 30px;
@@ -758,31 +758,31 @@ class DashboardGenerator:
             margin-bottom: 30px;
             text-align: center;
         }}
-        
+
         h1 {{
             color: #667eea;
             font-size: 2.5em;
             margin-bottom: 10px;
         }}
-        
+
         .subtitle {{
             color: #666;
             font-size: 1.1em;
         }}
-        
+
         .timestamp {{
             color: #999;
             font-size: 0.9em;
             margin-top: 10px;
         }}
-        
+
         .metrics-grid {{
             display: grid;
             grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
             gap: 20px;
             margin-bottom: 30px;
         }}
-        
+
         .metric-card {{
             background: white;
             padding: 25px;
@@ -790,31 +790,31 @@ class DashboardGenerator:
             box-shadow: 0 5px 15px rgba(0,0,0,0.1);
             transition: transform 0.3s, box-shadow 0.3s;
         }}
-        
+
         .metric-card:hover {{
             transform: translateY(-5px);
             box-shadow: 0 10px 25px rgba(0,0,0,0.2);
         }}
-        
+
         .metric-icon {{
             font-size: 2.5em;
             margin-bottom: 10px;
         }}
-        
+
         .metric-value {{
             font-size: 2em;
             font-weight: bold;
             color: #667eea;
             margin: 10px 0;
         }}
-        
+
         .metric-label {{
             color: #666;
             font-size: 0.95em;
             text-transform: uppercase;
             letter-spacing: 1px;
         }}
-        
+
         .section {{
             background: white;
             padding: 30px;
@@ -822,7 +822,7 @@ class DashboardGenerator:
             box-shadow: 0 5px 15px rgba(0,0,0,0.1);
             margin-bottom: 30px;
         }}
-        
+
         h2 {{
             color: #667eea;
             font-size: 1.8em;
@@ -830,19 +830,19 @@ class DashboardGenerator:
             border-bottom: 3px solid #667eea;
             padding-bottom: 10px;
         }}
-        
+
         table {{
             width: 100%;
             border-collapse: collapse;
             margin-top: 20px;
         }}
-        
+
         th, td {{
             padding: 15px;
             text-align: left;
             border-bottom: 1px solid #eee;
         }}
-        
+
         th {{
             background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
             color: white;
@@ -851,18 +851,18 @@ class DashboardGenerator:
             font-size: 0.9em;
             letter-spacing: 1px;
         }}
-        
+
         tr:hover {{
             background: #f8f9ff;
         }}
-        
+
         .chart-container {{
             margin: 20px 0;
             padding: 20px;
             background: #f8f9ff;
             border-radius: 10px;
         }}
-        
+
         .badge {{
             display: inline-block;
             padding: 5px 12px;
@@ -871,38 +871,38 @@ class DashboardGenerator:
             font-weight: 600;
             margin: 0 5px;
         }}
-        
+
         .badge-success {{
             background: #2ecc71;
             color: white;
         }}
-        
+
         .badge-warning {{
             background: #f39c12;
             color: white;
         }}
-        
+
         .badge-info {{
             background: #3498db;
             color: white;
         }}
-        
+
         .grid-2 {{
             display: grid;
             grid-template-columns: 1fr 1fr;
             gap: 30px;
         }}
-        
+
         @media (max-width: 768px) {{
             .grid-2 {{
                 grid-template-columns: 1fr;
             }}
-            
+
             .metrics-grid {{
                 grid-template-columns: 1fr;
             }}
         }}
-        
+
         .progress-bar {{
             background: #eee;
             height: 8px;
@@ -910,13 +910,13 @@ class DashboardGenerator:
             overflow: hidden;
             margin: 10px 0;
         }}
-        
+
         .progress-fill {{
             height: 100%;
             background: linear-gradient(90deg, #667eea 0%, #764ba2 100%);
             transition: width 0.3s ease;
         }}
-        
+
         footer {{
             text-align: center;
             color: white;
@@ -933,45 +933,45 @@ class DashboardGenerator:
             <p class="subtitle">Comprehensive Insights from The Movie Database</p>
             <p class="timestamp">Generated: {datetime.now().strftime("%B %d, %Y at %I:%M %p")}</p>
         </header>
-        
+
         <div class="metrics-grid">
             <div class="metric-card">
                 <div class="metric-icon">🎬</div>
                 <div class="metric-value">{stats['total_movies']:,}</div>
                 <div class="metric-label">Total Movies</div>
             </div>
-            
+
             <div class="metric-card">
                 <div class="metric-icon">💰</div>
                 <div class="metric-value">${stats['total_revenue']:,.0f}M</div>
                 <div class="metric-label">Total Revenue</div>
             </div>
-            
+
             <div class="metric-card">
                 <div class="metric-icon">⭐</div>
                 <div class="metric-value">{stats['avg_rating']:.2f}/10</div>
                 <div class="metric-label">Average Rating</div>
             </div>
-            
+
             <div class="metric-card">
                 <div class="metric-icon">🎭</div>
                 <div class="metric-value">{stats['directors']:,}</div>
                 <div class="metric-label">Unique Directors</div>
             </div>
-            
+
             <div class="metric-card">
                 <div class="metric-icon">🌍</div>
                 <div class="metric-value">{stats['languages']:,}</div>
                 <div class="metric-label">Languages</div>
             </div>
-            
+
             <div class="metric-card">
                 <div class="metric-icon">💵</div>
                 <div class="metric-value">${stats['avg_revenue']:,.0f}M</div>
                 <div class="metric-label">Avg Revenue</div>
             </div>
         </div>
-        
+
         <div class="grid-2">
             <div class="section">
                 <h2>📊 Top 10 Highest Revenue Movies</h2>
@@ -986,7 +986,7 @@ class DashboardGenerator:
                     </thead>
                     <tbody>
         """
-        
+
         for idx, row in top_revenue_list.iterrows():
             rating_badge = 'success' if row['vote_average'] >= 7 else 'warning'
             html_content += f"""
@@ -997,12 +997,12 @@ class DashboardGenerator:
                             <td><span class="badge badge-{rating_badge}">{row['vote_average']:.1f}/10</span></td>
                         </tr>
             """
-        
+
         html_content += """
                     </tbody>
                 </table>
             </div>
-            
+
             <div class="section">
                 <h2>⭐ Top 10 Highest Rated Movies</h2>
                 <table>
@@ -1016,7 +1016,7 @@ class DashboardGenerator:
                     </thead>
                     <tbody>
         """
-        
+
         for idx, row in top_rated_list.iterrows():
             html_content += f"""
                         <tr>
@@ -1026,18 +1026,18 @@ class DashboardGenerator:
                             <td>{row['vote_count']:,} votes</td>
                         </tr>
             """
-        
+
         html_content += """
                     </tbody>
                 </table>
             </div>
         </div>
-        
+
         <div class="section">
             <h2>🎭 Genre Performance Analysis</h2>
             <div class="chart-container">
         """
-        
+
         max_revenue = genre_stats['total_revenue'].max()
         for _, row in genre_stats.iterrows():
             percentage = (row['total_revenue'] / max_revenue) * 100
@@ -1052,11 +1052,11 @@ class DashboardGenerator:
                     </div>
                 </div>
             """
-        
+
         html_content += f"""
             </div>
         </div>
-        
+
         <div class="section">
             <h2>📈 Key Insights</h2>
             <div style="line-height: 2;">
@@ -1067,7 +1067,7 @@ class DashboardGenerator:
                 <p>✅ <strong>Top Genre:</strong> {genre_stats.iloc[0]['genre']} leads with ${genre_stats.iloc[0]['total_revenue']:,.0f}M in revenue</p>
             </div>
         </div>
-        
+
         <footer>
             <p>📊 TMDB Movie Data Analysis Pipeline | Built with PySpark & Python</p>
             <p>Data Source: The Movie Database (TMDB) API</p>
@@ -1076,14 +1076,14 @@ class DashboardGenerator:
 </body>
 </html>
         """
-        
+
         output_path = self.viz_dir / output_file
         with open(output_path, 'w', encoding='utf-8') as f:
             f.write(html_content)
-        
+
         logger.info(f"Interactive HTML dashboard saved to {output_path}")
         return str(output_path)
-    
+
     def generate_all_dashboards(
         self,
         df: DataFrame,
@@ -1091,9 +1091,9 @@ class DashboardGenerator:
     ) -> Dict[str, str]:
         """Generate all visualization dashboards"""
         logger.info("Generating all visualization dashboards")
-        
+
         dashboards = {}
-        
+
         try:
             dashboards['executive_summary'] = self.create_executive_summary_dashboard(df, kpis)
             dashboards['financial_performance'] = self.create_financial_performance_dashboard(df)
@@ -1113,11 +1113,11 @@ class DashboardGenerator:
                 logger.info("Plotly not available — skipping interactive Plotly dashboards")
 
             logger.info(f"Generated {len(dashboards)} dashboards successfully")
-            
+
         except Exception as e:
             logger.error(f"Error generating dashboards: {str(e)}")
             raise
-        
+
         return dashboards
 
     def generate_all_visualizations(

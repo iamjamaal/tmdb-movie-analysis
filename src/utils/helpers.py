@@ -13,7 +13,7 @@ from datetime import datetime
 def load_config(config_path: str) -> Dict[str, Any]:
     """Load configuration from YAML file"""
     logger = logging.getLogger(__name__)
-    
+
     try:
         with open(config_path, 'r') as f:
             config = yaml.safe_load(f)
@@ -32,17 +32,17 @@ def setup_logging(
     log_file: Optional[str] = None
 ) -> None:
     """Setup logging configuration"""
-    
+
     log_format = '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
     handlers = [logging.StreamHandler()]
-    
+
     if log_file:
         # Ensure log directory exists
         log_dir = os.path.dirname(log_file)
         if log_dir:
             os.makedirs(log_dir, exist_ok=True)
         handlers.append(logging.FileHandler(log_file))
-    
+
     logging.basicConfig(
         level=getattr(logging, log_level.upper()),
         format=log_format,
@@ -162,7 +162,7 @@ def create_run_id() -> str:
 def retry_on_failure(max_retries: int = 3, delay: int = 2):
     """Decorator for retrying function on failure"""
     import time
-    
+
     def decorator(func):
         def wrapper(*args, **kwargs):
             logger = logging.getLogger(func.__module__)
@@ -183,13 +183,13 @@ def retry_on_failure(max_retries: int = 3, delay: int = 2):
 def measure_execution_time(func):
     """Decorator to measure function execution time"""
     import functools
-    
+
     @functools.wraps(func)
     def wrapper(*args, **kwargs):
         logger = logging.getLogger(func.__module__)
         start_time = datetime.now()
         logger.info(f"Starting {func.__name__}")
-        
+
         try:
             result = func(*args, **kwargs)
             elapsed = (datetime.now() - start_time).total_seconds()
@@ -199,37 +199,37 @@ def measure_execution_time(func):
             elapsed = (datetime.now() - start_time).total_seconds()
             logger.error(f"Failed {func.__name__} after {elapsed:.2f}s: {str(e)}")
             raise
-    
+
     return wrapper
 
 
 class ProgressTracker:
     """Track progress of long-running operations"""
-    
+
     def __init__(self, total: int, description: str = "Processing"):
         self.total = total
         self.current = 0
         self.description = description
         self.start_time = datetime.now()
         self.logger = logging.getLogger(__name__)
-        
+
     def update(self, increment: int = 1) -> None:
         """Update progress"""
         self.current += increment
         percentage = (self.current / self.total * 100) if self.total > 0 else 0
-        
+
         if self.current % max(1, self.total // 10) == 0 or self.current == self.total:
             elapsed = (datetime.now() - self.start_time).total_seconds()
             rate = self.current / elapsed if elapsed > 0 else 0
             eta = (self.total - self.current) / rate if rate > 0 else 0
-            
+
             self.logger.info(
                 f"{self.description}: {self.current}/{self.total} "
                 f"({percentage:.1f}%) - "
                 f"Rate: {rate:.2f} items/s - "
                 f"ETA: {eta:.1f}s"
             )
-    
+
     def complete(self) -> None:
         """Mark as complete"""
         elapsed = (datetime.now() - self.start_time).total_seconds()
@@ -243,12 +243,12 @@ def validate_environment_variables(required_vars: List[str]) -> None:
     """Validate that required environment variables are set"""
     logger = logging.getLogger(__name__)
     missing_vars = [var for var in required_vars if not os.getenv(var)]
-    
+
     if missing_vars:
         error_msg = f"Missing required environment variables: {', '.join(missing_vars)}"
         logger.error(error_msg)
         raise EnvironmentError(error_msg)
-    
+
     logger.info("All required environment variables are set")
 
 

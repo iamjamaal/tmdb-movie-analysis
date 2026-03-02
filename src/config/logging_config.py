@@ -12,10 +12,10 @@ from datetime import datetime
 
 class LoggerConfig:
     """Centralized logging configuration"""
-    
+
     DEFAULT_FORMAT = '%(asctime)s - %(name)s - %(levelname)s - [%(filename)s:%(lineno)d] - %(message)s'
     DEFAULT_DATE_FORMAT = '%Y-%m-%d %H:%M:%S'
-    
+
     @staticmethod
     def setup_logger(
         name: str,
@@ -29,7 +29,7 @@ class LoggerConfig:
     ) -> logging.Logger:
         """
         Setup and configure logger
-        
+
         Args:
             name: Logger name
             log_level: Logging level (DEBUG, INFO, WARNING, ERROR, CRITICAL)
@@ -39,42 +39,42 @@ class LoggerConfig:
             file_output: Enable file output
             max_bytes: Maximum size of log file before rotation
             backup_count: Number of backup files to keep
-            
+
         Returns:
             Configured logger instance
         """
         logger = logging.getLogger(name)
         logger.setLevel(getattr(logging, log_level.upper()))
-        
+
         # Remove existing handlers
         logger.handlers.clear()
-        
+
         # Create formatter
         formatter = logging.Formatter(
             LoggerConfig.DEFAULT_FORMAT,
             datefmt=LoggerConfig.DEFAULT_DATE_FORMAT
         )
-        
+
         # Console handler
         if console_output:
             console_handler = logging.StreamHandler()
             console_handler.setLevel(getattr(logging, log_level.upper()))
             console_handler.setFormatter(formatter)
             logger.addHandler(console_handler)
-        
+
         # File handler
         if file_output:
             if log_dir is None:
                 log_dir = os.getenv('LOG_DIR', './logs')
-            
+
             # Ensure log directory exists
             Path(log_dir).mkdir(parents=True, exist_ok=True)
-            
+
             if log_file is None:
                 log_file = f"{name}_{datetime.now().strftime('%Y%m%d')}.log"
-            
+
             log_path = os.path.join(log_dir, log_file)
-            
+
             # Rotating file handler
             file_handler = logging.handlers.RotatingFileHandler(
                 log_path,
@@ -84,10 +84,10 @@ class LoggerConfig:
             file_handler.setLevel(getattr(logging, log_level.upper()))
             file_handler.setFormatter(formatter)
             logger.addHandler(file_handler)
-        
+
         logger.info(f"Logger '{name}' configured successfully")
         return logger
-    
+
     @staticmethod
     def setup_pipeline_logger(
         component: str,
@@ -95,21 +95,21 @@ class LoggerConfig:
     ) -> logging.Logger:
         """
         Setup logger for pipeline components
-        
+
         Args:
             component: Pipeline component name
             run_id: Unique run identifier
-            
+
         Returns:
             Configured logger
         """
         log_dir = os.getenv('LOG_DIR', './logs/pipeline')
-        
+
         if run_id:
             log_file = f"{component}_{run_id}.log"
         else:
             log_file = f"{component}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.log"
-        
+
         return LoggerConfig.setup_logger(
             name=f"tmdb_pipeline.{component}",
             log_level=os.getenv('LOG_LEVEL', 'INFO'),
@@ -118,7 +118,7 @@ class LoggerConfig:
             console_output=True,
             file_output=True
         )
-    
+
     @staticmethod
     def setup_spark_logger() -> logging.Logger:
         """Setup logger for Spark operations"""
@@ -129,7 +129,7 @@ class LoggerConfig:
             console_output=False,
             file_output=True
         )
-    
+
     @staticmethod
     def setup_api_logger() -> logging.Logger:
         """Setup logger for API operations"""
@@ -140,32 +140,32 @@ class LoggerConfig:
             console_output=True,
             file_output=True
         )
-    
+
     @staticmethod
     def get_logger(name: str) -> logging.Logger:
         """Get or create logger with default configuration"""
         logger = logging.getLogger(name)
-        
+
         if not logger.handlers:
             return LoggerConfig.setup_logger(name)
-        
+
         return logger
 
 
 class PerformanceLogger:
     """Logger for performance metrics"""
-    
+
     def __init__(self, component: str):
         self.component = component
         self.logger = LoggerConfig.get_logger(f"performance.{component}")
         self.start_time = None
         self.metrics = {}
-    
+
     def start(self, operation: str) -> None:
         """Start timing an operation"""
         self.start_time = datetime.now()
         self.logger.info(f"Starting {operation}")
-    
+
     def end(self, operation: str, **kwargs) -> None:
         """End timing an operation"""
         if self.start_time:
@@ -176,7 +176,7 @@ class PerformanceLogger:
             )
             self.metrics[operation] = elapsed
             self.start_time = None
-    
+
     def log_metric(self, metric_name: str, value: float, **kwargs) -> None:
         """Log a custom metric"""
         self.logger.info(
@@ -184,7 +184,7 @@ class PerformanceLogger:
             extra={**kwargs, 'metric_name': metric_name, 'metric_value': value}
         )
         self.metrics[metric_name] = value
-    
+
     def get_metrics(self) -> dict:
         """Get all collected metrics"""
         return self.metrics.copy()
@@ -192,7 +192,7 @@ class PerformanceLogger:
 
 class AuditLogger:
     """Logger for audit trail"""
-    
+
     def __init__(self):
         self.logger = LoggerConfig.setup_logger(
             name='audit',
@@ -201,7 +201,7 @@ class AuditLogger:
             console_output=False,
             file_output=True
         )
-    
+
     def log_data_access(
         self,
         user: str,
@@ -220,7 +220,7 @@ class AuditLogger:
                 'status': status
             }
         )
-    
+
     def log_pipeline_run(
         self,
         run_id: str,
@@ -239,7 +239,7 @@ class AuditLogger:
                 **kwargs
             }
         )
-    
+
     def log_data_quality(
         self,
         dataset: str,
