@@ -186,10 +186,13 @@ class TestTMDBClient:
         mock_resp_movie.raise_for_status = MagicMock()
 
         import requests as req
-        mock_resp_credits = MagicMock()
-        mock_resp_credits.raise_for_status.side_effect = req.exceptions.Timeout()
-        mock_get.side_effect = [mock_resp_movie,
-                                req.exceptions.Timeout("timeout")]
+        # tenacity retries on Timeout up to retry_attempts times (2 in test_config).
+        # Provide a Timeout for each attempt so the mock isn't exhausted mid-retry.
+        mock_get.side_effect = [
+            mock_resp_movie,                      # movie fetch succeeds
+            req.exceptions.Timeout("timeout"),    # credits attempt 1
+            req.exceptions.Timeout("timeout"),    # credits attempt 2 (retry)
+        ]
 
         client = self._make_client(test_config)
         result = client.get_complete_movie_data(12345)
