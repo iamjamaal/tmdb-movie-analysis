@@ -1,5 +1,11 @@
 """
-TMDB API Client with Rate Limiting, Caching, and Error Handling
+TMDB API Client with Rate Limiting, Caching, and Error Handling.
+
+Retry strategy — two independent layers:
+  1. Transport (urllib3): retries HTTP 429/5xx at the adapter level before the
+     application sees the response.
+  2. Application (tenacity): retries on Timeout/ConnectionError with exponential
+     backoff, giving full visibility in logs via before_sleep_log.
 """
 
 import os
@@ -12,9 +18,16 @@ from requests.adapters import HTTPAdapter
 from requests.packages.urllib3.util.retry import Retry
 import redis
 import json
-from functools import wraps
 from threading import Lock
 import hashlib
+from tenacity import (
+    Retrying,
+    RetryError,
+    retry_if_exception_type,
+    stop_after_attempt,
+    wait_exponential,
+    before_sleep_log,
+)
 
 
 logger = logging.getLogger(__name__)
@@ -139,7 +152,11 @@ class TMDBClient:
         
         self.base_url = config.get('api', {}).get('base_url', 'https://api.themoviedb.org/3')
         self.timeout = config.get('api', {}).get('timeout', 30)
-        
+
+        # Application-level retry settings (separate from urllib3 transport-level retry)
+        self.app_retry_attempts = config.get('api', {}).get('retry_attempts', 3)
+        self.app_retry_delay = config.get('api', {}).get('retry_delay', 2)
+
         # Rate limiting
         rate_limit_config = config.get('api', {}).get('rate_limit', {})
         self.rate_limiter = RateLimiter(
@@ -182,59 +199,75 @@ class TMDBClient:
     
     def _make_request(self, endpoint: str, params: Optional[Dict] = None) -> Optional[Dict]:
         """
-        Make API request with rate limiting and caching
-        
+        Make API request with rate limiting, caching, and tenacity-powered retry.
+
+        Retry behaviour (tenacity):
+          - Retries on Timeout and ConnectionError (transient network issues).
+          - Exponential backoff: wait = retry_delay * 2^n, capped at retry_delay * 10.
+          - Each sleep is logged via before_sleep_log so retries are fully visible.
+          - HTTP 404 is treated as permanent and short-circuits immediately.
+          - All other HTTP errors (after urllib3 transport retries are exhausted)
+            are logged and return None without further retrying.
+
         Args:
-            endpoint: API endpoint
-            params: Query parameters
-            
+            endpoint: API endpoint path (e.g. "movie/299534")
+            params: Optional query parameters dict
+
         Returns:
-            API response or None on failure
+            Parsed JSON dict on success, or None if all retries are exhausted
         """
-        # Check cache first
+        # Serve from cache before touching the network
         cache_key = f"{endpoint}:{json.dumps(params or {}, sort_keys=True)}"
         if self.cache_enabled:
             cached_response = self.cache.get(cache_key)
             if cached_response:
                 return cached_response
-        
-        # Rate limiting
-        self.rate_limiter.acquire()
-        
-        # Build URL
+
         url = f"{self.base_url}/{endpoint}"
-        
-        # Add API key to params
-        if params is None:
-            params = {}
-        params['api_key'] = self.api_key
-        
+        request_params = dict(params or {})
+        request_params['api_key'] = self.api_key
+
         try:
-            response = self.session.get(url, params=params, timeout=self.timeout)
-            response.raise_for_status()
-            
-            data = response.json()
-            
-            # Cache successful response
-            if self.cache_enabled:
-                self.cache.set(cache_key, data)
-            
-            logger.debug(f"API request successful: {endpoint}")
-            return data
-            
+            # tenacity retries on transient network errors with exponential backoff.
+            # urllib3's Retry (mounted on the session) handles 429/5xx at the transport
+            # level before we ever reach this loop.
+            for attempt in Retrying(
+                retry=retry_if_exception_type((
+                    requests.exceptions.Timeout,
+                    requests.exceptions.ConnectionError,
+                )),
+                stop=stop_after_attempt(self.app_retry_attempts),
+                wait=wait_exponential(
+                    multiplier=self.app_retry_delay,
+                    min=self.app_retry_delay,
+                    max=self.app_retry_delay * 10,
+                ),
+                before_sleep=before_sleep_log(logger, logging.INFO),
+                reraise=False,
+            ):
+                with attempt:
+                    self.rate_limiter.acquire()
+                    response = self.session.get(url, params=request_params, timeout=self.timeout)
+                    response.raise_for_status()
+                    data = response.json()
+                    if self.cache_enabled:
+                        self.cache.set(cache_key, data)
+                    logger.debug(f"API request successful: {endpoint}")
+                    return data
+
+        except RetryError:
+            logger.error(f"All {self.app_retry_attempts} tenacity retry attempts exhausted for {endpoint}")
+            return None
+
         except requests.exceptions.HTTPError as e:
             if e.response.status_code == 404:
                 logger.warning(f"Resource not found: {endpoint}")
-                return None
-            logger.error(f"HTTP error for {endpoint}: {e}")
+            else:
+                logger.error(f"HTTP error for {endpoint}: {e}")
             return None
-            
-        except requests.exceptions.Timeout:
-            logger.error(f"Timeout for {endpoint}")
-            return None
-            
+
         except requests.exceptions.RequestException as e:
-            logger.error(f"Request exception for {endpoint}: {e}")
+            logger.error(f"Request error for {endpoint}: {e}")
             return None
     
     def get_movie(self, movie_id: int) -> Optional[Dict]:
